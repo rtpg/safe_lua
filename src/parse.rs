@@ -48,7 +48,7 @@ fn num_parser(i: &IStream) -> IResult<&IStream, ast::Expr> {
 }
 
 fn literal_string_parser(i: &IStream) -> IResult<&IStream, String> {
-    let (i, quote_char) = alt((char_parse('"'),
+   let (i, quote_char) = alt((char_parse('"'),
                                char_parse('\'')))(i)?;
     let disallowed_characters = match quote_char {
         '\'' => "'\\",
@@ -69,7 +69,7 @@ fn literal_string_parser(i: &IStream) -> IResult<&IStream, String> {
     // then confirm that we have the last character
     let (i, _) = char_parse(quote_char)(i)?;
     // KNOWNWRONG not sure about the type safety of from_utf8
-    return Ok((i, string_contents.into_iter().collect()));
+    return Ok((i, string_contents.into_iter().collect())); 
 }
 
 fn name(i: &IStream) -> IResult<&IStream, String> {
@@ -405,6 +405,10 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
+    #[test]
+    fn test_full_parse(){
+
+    }
     #[test]
     fn test_parse(){
         assert_eq!(expr("nil"), Ok((

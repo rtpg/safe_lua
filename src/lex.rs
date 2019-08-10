@@ -1,7 +1,11 @@
+use nom::character::complete::none_of;
 use nom::combinator::opt;
 use nom::sequence::preceded;
 use nom::combinator::map;
-use nom::multi::many1;
+use nom::multi::{many0, many1};
+use nom::character::complete::{
+    char as char_parse,
+    digit1};
 use nom::character::is_alphanumeric;
 use nom::character::is_alphabetic;
 use nom::branch::alt;
@@ -10,7 +14,11 @@ use nom::{
     error::ErrorKind,
     IResult,
     bytes::complete::tag,
+    combinator::peek,
 };
+use std::fs::File;
+use std::io::Read;
+use std::iter::FromIterator;
 
 pub type IStream = str;
 
@@ -26,11 +34,14 @@ Names (also called identifiers) in Lua can be any string of letters,
   fields, and labels. 
 
  */
-#[derive(Debug, PartialOrd, PartialEq)]
+#[derive(Debug, PartialOrd, PartialEq, Clone)]
 pub enum Lex {
     Name(String),
     Keyword(String),
     Symbol(String),
+    String(String),
+    Number(String),
+    Ignore,
 }
 
 fn _find_name_bound(input: &str) -> Option<usize> {
@@ -64,6 +75,12 @@ fn _find_name_bound(input: &str) -> Option<usize> {
     return Some(l);
 }
 
+pub fn parse_number(input: &str) -> IResult<&str, Lex> {
+    return digit1(input).map(|(res, ds)| 
+            (res, Lex::Number(ds.to_string()))
+            );
+}
+
 pub fn parse_name(input: &str) -> IResult<&str, Lex> {
     match _find_name_bound(input) {
         Some(idx) => {
@@ -91,8 +108,64 @@ fn _whitespace_bound(input: &str) -> Option<usize> {
             }
         }
     }
+    if input.len() == 0 {
+        return None; 
+    }
     return Some(input.len());
 }
+
+pub fn parse_string(input: &str) -> IResult<&str, Lex> {
+   let (i, quote_char) = alt((char_parse('"'),
+                              char_parse('\'')))(input)?;
+
+    
+    let disallowed_characters = match quote_char {
+        '\'' => "'\\",
+        '"' => "\"\\",
+        _ => panic!("Somehow matched a weird character")
+    };
+
+    // get the actual string contents
+    let (i, string_contents) = many0(
+        alt((
+            // eiiher not the quote char
+            // nore the escape
+            none_of(disallowed_characters),
+            // or the escape character followed by the quote
+            preceded(char_parse('\\'), alt((
+                char_parse(quote_char),
+                map(char_parse('n'), |_| '\n'),
+                // map(char_parse('a'), |_| '\a'),
+                // map(char_parse('b'), |_| '\b'),
+                // map(char_parse('f'), |_| '\f'),
+            )))
+        ))
+    )(i)?;
+    // then confirm that we have the last character
+    let (i, _) = char_parse(quote_char)(i)?;
+    // KNOWNWRONG not sure about the type safety of from_utf8
+    return Ok((i, 
+               Lex::String(string_contents.into_iter().collect())));
+}
+pub fn parse_comment(input: &str) -> IResult<&str, &str> {
+    match &input.get(..2) {
+        Some("--") => {
+            // dealing with a comment
+            let split_text: Vec<&str> = input.splitn(2, "\n").collect();
+            if split_text.len() == 1 {
+                return Ok(("", input));
+            } else{
+                return Ok((split_text[1], split_text[0]));
+            }
+        },
+        _ => {
+            return Err(
+                Err::Error((input, ErrorKind::Tag))
+            );
+        }
+    }
+}
+
 pub fn parse_whitespace(input: &str) -> IResult<&str, &str> {
     match _whitespace_bound(input){
         Some(i) => {
@@ -107,7 +180,7 @@ pub fn parse_whitespace(input: &str) -> IResult<&str, &str> {
     }
 }
 
-pub fn lex_all(i: &str) -> IResult<&str, Vec<Lex>> {
+pub fn lex_all_aux(i: &str) -> IResult<&str, Vec<Lex>> {
     
     let keyword_tokens = alt((
         alt((tag("and"),tag("break"),tag("do"),tag("else"),tag("elseif"),
@@ -131,21 +204,77 @@ pub fn lex_all(i: &str) -> IResult<&str, Vec<Lex>> {
     let keyword_parse = keyword_tokens;
 
     // return many1(parse_name)(i);
+    let ignored_content = alt((parse_whitespace, parse_comment));
     return many1(alt((
-        map(preceded(opt(parse_whitespace), keyword_parse),
+        map(ignored_content, |_| return Lex::Ignore),
+        map(keyword_parse,
             |kwd: &str| return Lex::Keyword(kwd.to_string())),
-        map(preceded(opt(parse_whitespace), symbol_parse),
+        map(symbol_parse,
             |sym: &str| return Lex::Symbol(sym.to_string())),
-        preceded(opt(parse_whitespace), parse_name),
+        parse_name,
+        parse_string,
+        parse_number,
     )))(i);
 }
 
+pub fn no_ignored_tokens(i: Vec<Lex>) -> Vec<Lex> {
+    let mut return_value: Vec<Lex> = Vec::new();
+    for token in i.iter(){
+        match token {
+            Lex::Ignore => {},
+            _ => return_value.push(token.clone())
+        }
+    }
+    return return_value;
+}
+
+pub fn lex_all(i: &str) -> IResult<&str, Vec<Lex>> {
+    return lex_all_aux(i).map(|(rest, tokens)| (
+        rest,
+        no_ignored_tokens(tokens)
+    ));
+}
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
+    fn test_parsing_constructs(){
+        // confirm that we can actually parse the lua test files
+        let mut file = File::open("lua_tests/constructs.lua").unwrap();
+        let mut contents = String::new();
+        dbg!(&file);
+        file.read_to_string(&mut contents);
+        let parse_result = lex_all(contents.as_str());
+        match parse_result {
+            Ok((remaining_input, _)) => assert_eq!(remaining_input, ""),
+            Err(_) => {
+                dbg!(parse_result);
+                panic!("Parse failure");
+            }
+        }
+    }
+
+    #[test]
+    fn test_string_parsing(){
+        assert_eq!(
+            parse_string("\"\\n\""),
+            Ok(("", Lex::String("\n".to_string())))
+        )
+    }
+
+    #[test]
     fn test_basic_lexing(){
+        assert_eq!(
+            parse_comment("-- hi there"),
+            Ok(("", "-- hi there"))
+        );
+
+        assert_eq!(
+            lex_all("hi -- hi there"),
+            Ok(("", vec![Lex::Name("hi".to_string())]))
+        );
+
         assert_eq!(
             parse_name("_abc"),
             Ok(("", Lex::Name("_abc".to_string())))
