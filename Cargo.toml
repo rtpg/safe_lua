@@ -1,0 +1,7 @@
+[package]
+name = "safe_lua"
+version = "0.1.0"
+authors = [" <raphael@rtpg.co>"]
+
+[dependencies]
+nom = "5.0.0"
