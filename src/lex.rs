@@ -1,4 +1,3 @@
-#[dead_code(off)]
 use nom::combinator::opt;
 use nom::sequence::preceded;
 use nom::combinator::map;
@@ -56,14 +55,23 @@ fn _find_name_bound(input: &str) -> Option<usize> {
             }
         }
     }
-    return Some(input.len());
+    let l = input.len();
+    if l == 0{
+        // don't match on empty string
+        return None;
+    }
+
+    return Some(l);
 }
 
-pub fn parse_name(input: &str) -> IResult<&str, &str> {
+pub fn parse_name(input: &str) -> IResult<&str, Lex> {
     match _find_name_bound(input) {
         Some(idx) => {
             let (result_name, rest_of_input ) = input.split_at(idx);
-            return Ok((result_name, rest_of_input));
+            return Ok((
+                rest_of_input,
+                Lex::Name(result_name.to_string()),
+            ));
         },
         None =>  return Err(
             Err::Error((input, ErrorKind::Alpha))
@@ -88,7 +96,8 @@ fn _whitespace_bound(input: &str) -> Option<usize> {
 pub fn parse_whitespace(input: &str) -> IResult<&str, &str> {
     match _whitespace_bound(input){
         Some(i) => {
-            return Ok(input.split_at(i));
+            let (ws, rest_of_input) = input.split_at(i);
+            return Ok((rest_of_input, ws));
         },
         None => {
             return Err(
@@ -121,13 +130,13 @@ pub fn lex_all(i: &str) -> IResult<&str, Vec<Lex>> {
     let symbol_parse = symbol_tokens;
     let keyword_parse = keyword_tokens;
 
+    // return many1(parse_name)(i);
     return many1(alt((
         map(preceded(opt(parse_whitespace), keyword_parse),
-            |kwd| return Lex::Keyword(kwd.to_string())),
+            |kwd: &str| return Lex::Keyword(kwd.to_string())),
         map(preceded(opt(parse_whitespace), symbol_parse),
-            |sym| return Lex::Symbol(sym.to_string())),
-        map(preceded(opt(parse_whitespace), parse_name),
-            |n| return Lex::Name(n.to_string()))
+            |sym: &str| return Lex::Symbol(sym.to_string())),
+        preceded(opt(parse_whitespace), parse_name),
     )))(i);
 }
 
@@ -137,6 +146,27 @@ mod tests {
 
     #[test]
     fn test_basic_lexing(){
+        assert_eq!(
+            parse_name("_abc"),
+            Ok(("", Lex::Name("_abc".to_string())))
+        );
+        assert_eq!(
+            parse_name("name12"),
+            Ok(("", Lex::Name("name12".to_string())))
+        );
+        assert_eq!(
+            lex_all("name"),
+            Ok(("", vec![Lex::Name("name".to_string())]))
+        );
+
+        assert_eq!(
+            lex_all("name1+n"),
+            Ok(("", 
+                vec![Lex::Name("name1".to_string()),
+                     Lex::Symbol("+".to_string()),
+                     Lex::Name("n".to_string())]))
+        );
+
         assert_eq!(
             lex_all("name1 name2 name3"),
             Ok(("", vec![

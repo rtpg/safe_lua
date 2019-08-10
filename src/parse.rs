@@ -16,14 +16,11 @@ use parse::nom::sequence::{
 };
 use parse::nom::multi::many0;
 use parse::nom::character::complete::none_of;
-use parse::nom::character::is_digit;
 use parse::nom::character::complete::char as char_parse;
-use parse::nom::bytes::complete::take_while;
 use ast;
 use lex::IStream;
 
 use parse::nom::{
-    named,
     IResult,
     bytes::complete::tag,
     branch::{
