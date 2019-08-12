@@ -4,9 +4,18 @@ mod eval;
 mod ast;
 mod parse;
 mod lex;
+use std::fs::File;
+use std::io::Read;
 
 fn main(){
+    let mut file = File::open("lua_tests/constructs.lua").unwrap();
+    let mut contents = String::new();
+    dbg!(&file);
+    file.read_to_string(&mut contents);
+    let parse_result = lex::lex_all(contents.as_str());
+    dbg!(parse_result);
 }
+
 
 #[cfg(test)]
 #[test]

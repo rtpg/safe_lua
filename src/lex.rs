@@ -1,3 +1,6 @@
+// loads of false positives from this decorator..
+#[allow(dead_code)]
+#[allow(unused_imports)]
 use nom::character::complete::none_of;
 use nom::combinator::opt;
 use nom::sequence::preceded;
@@ -39,7 +42,7 @@ pub enum Lex {
     Name(String),
     Keyword(String),
     Symbol(String),
-    String(String),
+    Str(String),
     Number(String),
     Ignore,
 }
@@ -145,7 +148,7 @@ pub fn parse_string(input: &str) -> IResult<&str, Lex> {
     let (i, _) = char_parse(quote_char)(i)?;
     // KNOWNWRONG not sure about the type safety of from_utf8
     return Ok((i, 
-               Lex::String(string_contents.into_iter().collect())));
+               Lex::Str(string_contents.into_iter().collect())));
 }
 pub fn parse_comment(input: &str) -> IResult<&str, &str> {
     match &input.get(..2) {
@@ -259,7 +262,7 @@ mod tests {
     fn test_string_parsing(){
         assert_eq!(
             parse_string("\"\\n\""),
-            Ok(("", Lex::String("\n".to_string())))
+            Ok(("", Lex::Str("\n".to_string())))
         )
     }
 
