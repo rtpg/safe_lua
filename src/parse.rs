@@ -1,4 +1,8 @@
 extern crate nom;
+use lex::{
+    ISlice,
+    lex_all
+};
 use parse::nom::sequence::tuple;
 use parse::nom::sequence::separated_pair;
 use parse::nom::character::complete::one_of;
@@ -6,6 +10,7 @@ use parse::nom::multi::{
     many1,
     separated_list
 };
+use lex;
 
 use parse::nom::combinator::opt;
 
@@ -28,8 +33,21 @@ use parse::nom::{
     },
     combinator::{
         map
-    }
+    },
+    Err,
+    error::ErrorKind,
+    AsBytes,
+    Compare,
 };
+
+
+// impl AsBytes for &IStream {
+
+// }
+
+// impl Compare for &IStream {
+
+// }
 
 fn chunk(i: &IStream) -> IResult<&IStream, ast::Chunk> {
     let (i, bl) = block(i)?;
@@ -39,56 +57,62 @@ fn chunk(i: &IStream) -> IResult<&IStream, ast::Chunk> {
 fn num_component(i: char) -> bool {
     return i.is_numeric();
 }
-fn num_parser(i: &IStream) -> IResult<&IStream, ast::Expr> {
-    // KNOWNWRONG this doesn't handle most numbers
-    
-    return map(
-        many1(one_of("0123456789")), |_| ast::Expr::Numeral(String::from("1")),
-    )(i);
+fn num_parser(i: &IStream) -> IResult<&ISlice, ast::Expr> {
+    match i.get(0) {
+        Some(lex::Lex::Number(n)) => return Ok((
+            &i[1..], ast::Expr::Numeral(n.to_string())
+        )),
+        _ => return Err(
+                Err::Error((i, ErrorKind::Alpha))
+        )
+    }
 }
 
-fn literal_string_parser(i: &IStream) -> IResult<&IStream, String> {
-   let (i, quote_char) = alt((char_parse('"'),
-                               char_parse('\'')))(i)?;
-    let disallowed_characters = match quote_char {
-        '\'' => "'\\",
-        '"' => "\"\\",
-        _ => panic!("Somehow matched a weird character")
-    };
-
-    // get the actual string contents
-    let (i, string_contents) = many0(
-        alt((
-            // eiiher not the quote char
-            // nore the escape
-            none_of(disallowed_characters),
-            // or the escape character followed by the quote
-            preceded(char_parse('\\'), char_parse(quote_char)),
-        ))
-    )(i)?;
-    // then confirm that we have the last character
-    let (i, _) = char_parse(quote_char)(i)?;
-    // KNOWNWRONG not sure about the type safety of from_utf8
-    return Ok((i, string_contents.into_iter().collect())); 
+fn literal_string_parser(i: &IStream) -> IResult<&ISlice, String> {
+    match i.get(0) {
+        Some(lex::Lex::Str(n)) => return Ok((
+            &i[1..], n.to_string()
+        )),
+        _ => return Err(
+                Err::Error((i, ErrorKind::Alpha))
+        )
+    }
 }
 
-fn name(i: &IStream) -> IResult<&IStream, String> {
-    // WRONG the definition of name is a bit more complex normally
-    // Like with the keywords
-    let (i, contents) = many1(
-        one_of("abcdefghijklmnopqrstuvwxyz$_")
-    )(i)?;
-    
-    return Ok((
-        i,
-        contents.into_iter().collect()
-    ));
+fn name(i: &IStream) -> IResult<&ISlice, String> {
+    match i.get(0) {
+        Some(lex::Lex::Name(n)) => return Ok((
+            &i[1..], n.to_string()
+        )),
+        _ => return Err(
+                Err::Error((i, ErrorKind::Alpha))
+        )
+    }
 }
 
-fn parlist(i: &IStream) -> IResult<&IStream, ast::Parlist> {
+fn kwd<'a>(tag: &'a str) -> impl Fn(&'a IStream) -> IResult<&'a IStream, lex::Lex> {
+    move |i: &IStream| {
+        let s = tag.clone();
+        match i.get(0){
+            Some(lex::Lex::Keyword(_s)) => {
+                if &s == _s {
+                    return Ok((&i[1..], lex::Lex::Keyword(_s.to_string())))
+                } else {
+                    return Err(Err::Error((i, ErrorKind::Tag)))
+                }
+            },
+            _ => return Err(
+                Err::Error((i, ErrorKind::Tag))
+            )
+        }
+    }
+}
+
+fn parlist(i: &ISlice) -> IResult<&IStream, ast::Parlist> {
     // WRONG doesn't handle elipsis yet
+
     let (i, namelist) = separated_list(
-        tag(","),
+        kwd(","),
         name
         )(i)?;
     return Ok((
@@ -101,7 +125,7 @@ fn parlist(i: &IStream) -> IResult<&IStream, ast::Parlist> {
 }
 
 fn exprlist(i: &IStream) -> IResult<&IStream, ast::Exprlist>{
-    return separated_list(tag(","), expr)(i);
+    return separated_list(kwd(","), expr)(i);
 }
 
 fn args(i: &IStream) -> IResult<&IStream, ast::Args> {
@@ -110,7 +134,7 @@ fn args(i: &IStream) -> IResult<&IStream, ast::Args> {
         map(literal_string_parser, |s| ast::Args::Literal(s)),
         map(
             delimited(
-                tag("("), opt(exprlist), tag(")")
+                kwd("("), opt(exprlist), kwd(")")
             ),
             |maybe_e| ast::Args::List(maybe_e),
         )
@@ -119,17 +143,17 @@ fn args(i: &IStream) -> IResult<&IStream, ast::Args> {
 
 fn funcbody(i: &IStream) -> IResult<&IStream, ast::Funcbody> {
     let (i, m_parlist) = delimited(
-        tag("("),
+        kwd("("),
         opt(parlist),
-        tag(")"))(i)?;
-    let (i, (b, _)) = pair(block, tag("end"))(i)?;
+        kwd(")"))(i)?;
+    let (i, (b, _)) = pair(block, kwd("end"))(i)?;
     return Ok((i, ast::Funcbody {parlist: m_parlist, body: b}));
 }
 
 fn funccall(i: &IStream) -> IResult<&IStream, ast::Funccall> {
     let (i, p) = prefixexp(i)?;
     let (i, maybe_name) = opt(
-        preceded(tag(":"), name)
+        preceded(kwd(":"), name)
     )(i)?;
     let (i, a) = args(i)?;
     return Ok((i, ast::Funccall {expr: p, 
@@ -145,9 +169,9 @@ fn prefixexp(i: &IStream) -> IResult<&IStream, ast::Prefixexpr> {
         ),
         map(
             delimited(
-                tag("("),
+                kwd("("),
                 expr,
-                tag(")"),
+                kwd(")"),
             ),
             |e| ast::Prefixexpr::ParendExpr(e),
         )
@@ -155,13 +179,13 @@ fn prefixexp(i: &IStream) -> IResult<&IStream, ast::Prefixexpr> {
 }
 
 fn namelist(i: &IStream) -> IResult<&IStream, ast::Namelist> {
-    return separated_list(tag(","), name)(i);
+    return separated_list(kwd(","), name)(i);
 }
 
 fn funcname(i: &IStream) -> IResult<&IStream, ast::Funcname> {
     let (i, f_n) = name(i)?;
-    let (i, o_n_c) = many0(preceded(tag("."), name))(i)?;
-    let (i, m_m_c) = opt(preceded(tag(":"), name))(i)?;
+    let (i, o_n_c) = many0(preceded(kwd("."), name))(i)?;
+    let (i, m_m_c) = opt(preceded(kwd(":"), name))(i)?;
     return Ok((i, ast::Funcname {
         first_name_component: f_n,
         other_name_components: o_n_c,
@@ -174,16 +198,16 @@ fn var(i: &IStream) -> IResult<&IStream, ast::Var>{
         map(
             pair(prefixexp,
                 delimited(
-                    tag("["),
+                    kwd("["),
                     expr,
-                    tag("]")
+                    kwd("]")
                 )),
             |(p, e)| ast::Var::ArrAccess(p, e),
         ),
         map(
             pair(
                 prefixexp,
-                preceded(tag("."), name)
+                preceded(kwd("."), name)
             ),
             |(p, n)| ast::Var::DotAccess(p, n),
         ),
@@ -192,16 +216,16 @@ fn var(i: &IStream) -> IResult<&IStream, ast::Var>{
 }
 fn varlist(i: &IStream) -> IResult<&IStream, ast::Varlist> {
     return map(
-        separated_list(tag(","), var),
+        separated_list(kwd(","), var),
         |l| ast::Varlist {vars: l}
     )(i);
 }
 
 fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
     return alt((
-        map(tag(";"), |_| ast::Stat::Semicol),
+        map(kwd(";"), |_| ast::Stat::Semicol),
         map(
-            separated_pair(varlist, tag("="), exprlist),
+            separated_pair(varlist, kwd("="), exprlist),
             |(varlist, explist)| ast::Stat::Eql(varlist, explist)
         ),
         // map(
@@ -209,44 +233,44 @@ fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
         //     |f| ast::Stat::Call
         // ),
         map(
-            delimited(tag("::"), name, tag("::")),
+            delimited(kwd("::"), name, kwd("::")),
             |name| ast::Stat::Label(name),
         ),
         map(
-            tag("break"),
+            kwd("break"),
             |_| ast::Stat::Break,
         ),
         map(
-            preceded(tag("goto"), name),
+            preceded(kwd("goto"), name),
             |n| ast::Stat::Goto(n),
         ),
         map(
             delimited(
-                tag("do"),
+                kwd("do"),
                 block,
-                tag("end")
+                kwd("end")
             ),
             |b| ast::Stat::Do(b),
         ),
         map(
             pair(
-                preceded(tag("while"), expr),
-                delimited(tag("do"), block, tag("end"))
+                preceded(kwd("while"), expr),
+                delimited(kwd("do"), block, kwd("end"))
             ),
             |(e, b)| ast::Stat::While(e, b),
         ),
         map(
             tuple((
-                delimited(tag("if"), expr, tag("then")),
+                delimited(kwd("if"), expr, kwd("then")),
                 block,
                 many0(
                     pair(
-                        delimited(tag("elseif"), expr, tag("then")),
+                        delimited(kwd("elseif"), expr, kwd("then")),
                         block
                     )
                 ),
-                opt(preceded(tag("else"), block)),
-                tag("end"),
+                opt(preceded(kwd("else"), block)),
+                kwd("end"),
             )),
             |(p, t, ei_l, e_b, _)| ast::Stat::If {
                 predicate: p,
@@ -257,42 +281,42 @@ fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
         ),
         map(
             tuple((
-                delimited(tag("for"), name, tag("=")),
-                separated_pair(expr, tag(","), expr),
+                delimited(kwd("for"), name, kwd("=")),
+                separated_pair(expr, kwd(","), expr),
                 opt(
-                    preceded(tag(","), expr)
+                    preceded(kwd(","), expr)
                 ),
-                delimited(tag("do"), block, tag("end"))
+                delimited(kwd("do"), block, kwd("end"))
             )),
             |(n, (e1, e2), m_e3, b)| ast::Stat::For(n, e1, e2, m_e3, b)
         ),
         map(
             tuple((
-                delimited(tag("for"), namelist, tag("in")),
+                delimited(kwd("for"), namelist, kwd("in")),
                 exprlist,
-                delimited(tag("do"), block, tag("end")),
+                delimited(kwd("do"), block, kwd("end")),
             )),
             |(n, el, b)| ast::Stat::ForIn(n, el, b)
         ),
         map(
             preceded(
-                tag("function"),
+                kwd("function"),
                 pair(funcname, funcbody),
             ),
             |(n, b)| ast::Stat::FuncDecl(n, b)
         ),
         map(
             preceded(
-                pair(tag("local"), tag("function")),
+                pair(kwd("local"), kwd("function")),
                 pair(name, funcbody),
             ),
             |(n, b)| ast::Stat::LocalFuncDecl(n, b),
         ),
         map(
             pair(
-                preceded(tag("local"), namelist),
+                preceded(kwd("local"), namelist),
                 opt(
-                    preceded(tag("="), exprlist)
+                    preceded(kwd("="), exprlist)
                 )
             ),
             |(nl, m_el)| ast::Stat::LocalNames(nl, m_el)
@@ -304,9 +328,9 @@ fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
 // }
 fn retstat(i: &IStream) -> IResult<&IStream, ast::Retstat>{
     let (i, m_elist) = delimited(
-        tag("return"),
+        kwd("return"),
         opt(exprlist),
-        opt(tag(";"))
+        opt(kwd(";"))
     )(i)?;
     return Ok((i, ast::Retstat { return_expr: m_elist}));
 }
@@ -321,7 +345,7 @@ fn block(i: &IStream) -> IResult<&IStream, ast::Block> {
 }
 
 fn function_def(i: &IStream) -> IResult<&IStream, ast::Expr> {
-    let (i, _) = tag("function")(i)?;
+    let (i, _) = kwd("function")(i)?;
     let (i, f_b) = funcbody(i)?;
     return Ok((
         i,
@@ -333,14 +357,14 @@ fn field(i: &IStream) -> IResult<&IStream, ast::Field> {
     // '[' exp ']' '=' exp
     let bracked_field = map(
         pair(
-            delimited(tag("["), expr, tag("]")),
-            preceded(tag("="), expr)
+            delimited(kwd("["), expr, kwd("]")),
+            preceded(kwd("="), expr)
         ),
         | (e1, e2) | ast::Field::Bracketed(e1, e2)
     );
     // Name '=' exp
     let plain_eq = map(
-        separated_pair(name, tag("="), expr),
+        separated_pair(name, kwd("="), expr),
         | (n, e) | ast::Field::Named(n, e)
     );
 
@@ -353,16 +377,16 @@ fn field(i: &IStream) -> IResult<&IStream, ast::Field> {
 }
 
 fn fieldlist(i: &IStream) -> IResult<&IStream,  ast::Fieldlist> {
-    let fieldsep = alt((tag(","), tag(";")));
+    let fieldsep = alt((kwd(","), kwd(";")));
     let (i, fields) = separated_list(fieldsep, field)(i)?;
-    let (i, _) = opt(alt((tag(","), tag(";"))))(i)?;
+    let (i, _) = opt(alt((kwd(","), kwd(";"))))(i)?;
     return Ok((i, fields));
 }
 
 fn table_constructor(i: &IStream) -> IResult<&IStream, ast::Tableconstructor> {
-    let (i, _) = tag("{")(i)?;
+    let (i, _) = kwd("{")(i)?;
     let (i, maybe_fieldlist) = opt(fieldlist)(i)?;
-    let (i, _) = tag("}")(i)?;
+    let (i, _) = kwd("}")(i)?;
     return Ok(
         (i, maybe_fieldlist)
     );
@@ -371,27 +395,27 @@ fn table_constructor(i: &IStream) -> IResult<&IStream, ast::Tableconstructor> {
 fn binary_op(i: &IStream) -> IResult<&IStream, ast::Expr> {
     let (i, left_expr) = expr(i)?;
     let (i, operator) = alt((
-        tag("//"),tag(">>"),tag("<<"),tag(".."),
-        tag("<="),tag(">="),tag("=="),tag("~="),
-        tag("and"),tag("or"),
-        tag("+"), tag("-"), tag("*"), tag("/"), tag("^"), tag("%"),
-        tag("&"), tag("~"), tag("|"), tag("<"), tag(">"),
+        kwd("//"),kwd(">>"),kwd("<<"),kwd(".."),
+        kwd("<="),kwd(">="),kwd("=="),kwd("~="),
+        kwd("and"),kwd("or"),
+        kwd("+"), kwd("-"), kwd("*"), kwd("/"), kwd("^"), kwd("%"),
+        kwd("&"), kwd("~"), kwd("|"), kwd("<"), kwd(">"),
     ))(i)?;
     let (i, right_expr) = expr(i)?;
     return Ok((i, ast::Expr::BinOp(Box::new(left_expr), 
-                                   String::from(operator), 
+                                   operator, 
                                    Box::new(right_expr))));
 }
 
 fn expr(i: &IStream) -> IResult<&IStream, ast::Expr> {
 
     return alt((
-        map(tag("nil"), |_| ast::Expr::Nil),
-        map(tag("true"), |_| ast::Expr::True),
-        map(tag("false"), |_| ast::Expr::False),
+        map(kwd("nil"), |_| ast::Expr::Nil),
+        map(kwd("true"), |_| ast::Expr::True),
+        map(kwd("false"), |_| ast::Expr::False),
         num_parser,
         map(literal_string_parser, |s| ast::Expr::LiteralString(s)),
-        map(tag("..."), |_| ast::Expr::Ellipsis),
+        map(kwd("..."), |_| ast::Expr::Ellipsis),
         function_def,
         // TODO Pref
         map(table_constructor, |t| ast::Expr::Tbl(t)),
@@ -411,14 +435,19 @@ mod tests {
     }
     #[test]
     fn test_parse(){
-        assert_eq!(expr("nil"), Ok((
-            "",
+        let l: Vec<lex::Lex> = lex_all("nil").unwrap().1;
+        assert_eq!( 
+            expr(&l),
+         Ok((
+            vec![].as_ref(),
             ast::Expr::Nil
         )));
 
+        let m: Vec<lex::Lex> = lex_all("'hi this is a string with an \\' escape'").unwrap().1;
+
         assert_eq!(
-            expr("'hi this is a string with an \\' escape'"),Ok((
-                "",
+            expr(&m),Ok((
+                vec![].as_ref(),
                 ast::Expr::LiteralString(
                     String::from("hi this is a string with an ' escape")
                 )

@@ -23,7 +23,10 @@ use std::fs::File;
 use std::io::Read;
 use std::iter::FromIterator;
 
-pub type IStream = str;
+pub type IStream = [Lex];
+pub type ISlice = [Lex];
+
+
 
 /**
 

@@ -1,3 +1,4 @@
+use lex;
 // As usual in extended BNF, {A} means 0 or more As, and [A] means an optional A.
 	// chunk ::= block
 #[derive(Debug, PartialEq)]
@@ -154,7 +155,7 @@ pub enum Field {
 	// 	 ‘&’ | ‘~’ | ‘|’ | ‘>>’ | ‘<<’ | ‘..’ | 
 	// 	 ‘<’ | ‘<=’ | ‘>’ | ‘>=’ | ‘==’ | ‘~=’ | 
 	// 	 and | or
-type BinaryOperator = String;
+type BinaryOperator = lex::Lex;
 type UnaryOperator = String;
 	// unop ::= ‘-’ | not | ‘#’ | ‘~’
 type Name = String;
