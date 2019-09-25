@@ -240,6 +240,7 @@ pub fn lex_all(i: &str) -> IResult<&str, Vec<Lex>> {
         no_ignored_tokens(tokens)
     ));
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

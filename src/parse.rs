@@ -424,6 +424,20 @@ fn expr(i: &IStream) -> IResult<&IStream, ast::Expr> {
     ))(i);
 }
 
+pub fn parse(input: &str) -> ast::Block { 
+    let (input, tokens) = lex_all(input).unwrap();
+    if input.len() > 0 {
+        dbg!(input);
+        panic!("remaining input");
+    }
+    let (remaining_tokens, b) = block(&tokens).unwrap();
+    if remaining_tokens.len() > 0 {
+        dbg!(remaining_tokens);
+        panic!("Remaining tokens");
+    }
+    return b;
+}
+
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.

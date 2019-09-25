@@ -1,4 +1,30 @@
-use lex;
+use nom::multi::many1;
+use nom::combinator::{
+    map,
+    opt
+};
+use nom::branch::alt;
+
+use nom::sequence::{
+    preceded,
+    terminated,
+    separated_pair
+};
+
+use nom::bytes::complete::tag;
+use lex::{
+    Lex,
+};
+
+use nom::{
+    IResult,
+    Err,
+    error::ErrorKind,
+};
+
+type Lexes = Vec<Lex>;
+type R<'a, T> = IResult<&'a Lexes, T>;
+
 // As usual in extended BNF, {A} means 0 or more As, and [A] means an optional A.
 	// chunk ::= block
 #[derive(Debug, PartialEq)]
@@ -11,6 +37,17 @@ pub struct Block {
     pub stats: Vec<Stat>,
     pub retstat: Option<Retstat>
 }
+
+// pub fn parse_block(input: &Vec<Lex>) -> R<Block> {
+//     let (input, stats) = many1(parse_stat)(input)?;
+//     let (input, return_stat) = opt(parse_retstat)(input)?;
+//     return Ok(
+//         (input, Block {
+//             stats: stats,
+//             retstat: return_stat
+//         })
+//     );
+// }
 
 #[derive(Debug, PartialEq)]
 pub enum Stat {
@@ -51,11 +88,80 @@ pub enum Stat {
     LocalNames(Namelist, Option<Exprlist>),
 }
 
+fn _e<'a, T>(input: &Lexes) -> R<T> {
+    return Err(
+        Err::Error((input, ErrorKind::Alpha))
+    );
+}
+
+pub fn _symbol(symbol_txt: &str) -> impl Fn(&Lexes) -> R<Lex> {
+    |input: &Lexes| {
+        // TODO fixup
+        return _e(input);
+    }
+}
+
+pub fn _name(input: &Lexes) -> R<Lex> {
+    // TODO fixup
+    return _e(input);
+}
+
+// pub fn parse_stat(input: &Lexes) -> R<Stat> {
+//     return alt((
+//         (map(_symbol(";"),|_| Stat::Semicol,)),
+//         (map(preceded(
+//              _symbol("goto"),
+//              _name,),
+//         |Lex::Name(n)| Stat::Goto(n))),
+//         (map(
+//             preceded(
+//                 _symbol("do"),
+//                 terminated(
+//                     parse_block,
+//                     _symbol("end")
+//                 )
+//             ),
+//             |b| Stat::Do(b)
+//         )),
+//         (map(
+//             preceded(
+//                 _symbol("while"),
+//                 separated_pair(
+//                     parse_expr,
+//                     _symbol("do"),
+//                     terminated(
+//                         parse_block,
+//                         _symbol("end")
+//                     )
+//                 )
+//             ),
+//             |(expr, b)| Stat::While(expr, b)
+//         )),
+//         (map(
+//             preceded(
+//                 _symbol("repeat"),
+//                 separated_pair(
+//                     parse_block,
+//                     _symbol("until"),
+//                     terminated(parse_expr, _symbol("end"),
+//                     )
+//                 )
+//             ),
+//             |(b, e)| Stat::Repeat(b, e)
+//         ))
+//     ))(input);
+// }
+
 	// retstat ::= return [explist] [‘;’]
 #[derive(Debug, PartialEq)]
 pub struct Retstat {
     pub return_expr: Option<Exprlist>
 }
+
+pub fn parse_retstat(input: &Lexes) -> R<Retstat> {
+    return _e(input);
+}
+
 	// label ::= ‘::’ Name ‘::’
 #[derive(Debug, PartialEq)]
 pub struct Label {
@@ -102,6 +208,11 @@ pub enum Expr {
     BinOp(Box<Expr>, BinaryOperator, Box<Expr>),
     UnOp(UnaryOperator, Box<Expr>),
 }
+
+pub fn parse_expr(input: &Lexes) -> R<Expr>{
+    return _e(input);
+}
+
 	// prefixexp ::= var | functioncall | ‘(’ exp ‘)’
 #[derive(Debug, PartialEq)]
 pub enum Prefixexpr {
@@ -155,7 +266,7 @@ pub enum Field {
 	// 	 ‘&’ | ‘~’ | ‘|’ | ‘>>’ | ‘<<’ | ‘..’ | 
 	// 	 ‘<’ | ‘<=’ | ‘>’ | ‘>=’ | ‘==’ | ‘~=’ | 
 	// 	 and | or
-type BinaryOperator = lex::Lex;
+type BinaryOperator = Lex;
 type UnaryOperator = String;
 	// unop ::= ‘-’ | not | ‘#’ | ‘~’
 type Name = String;
