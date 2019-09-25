@@ -1,38 +1,17 @@
-use nom::multi::many1;
-use nom::combinator::{
-    map,
-    opt
-};
-use nom::branch::alt;
+#[allow(dead_code)]
 
-use nom::sequence::{
-    preceded,
-    terminated,
-    separated_pair
-};
-
-use nom::bytes::complete::tag;
 use lex::{
     Lex,
 };
 
-use nom::{
-    IResult,
-    Err,
-    error::ErrorKind,
-};
-
-type Lexes = Vec<Lex>;
-type R<'a, T> = IResult<&'a Lexes, T>;
-
 // As usual in extended BNF, {A} means 0 or more As, and [A] means an optional A.
 	// chunk ::= block
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Chunk {
     pub block: Block
 }
 	// block ::= {stat} [retstat]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     pub stats: Vec<Stat>,
     pub retstat: Option<Retstat>
@@ -49,7 +28,8 @@ pub struct Block {
 //     );
 // }
 
-#[derive(Debug, PartialEq)]
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Stat {
 	// stat ::=  ‘;’ | 
     Semicol,
@@ -86,24 +66,6 @@ pub enum Stat {
     LocalFuncDecl(Name, Funcbody),
 	// 	 local namelist [‘=’ explist] 
     LocalNames(Namelist, Option<Exprlist>),
-}
-
-fn _e<'a, T>(input: &Lexes) -> R<T> {
-    return Err(
-        Err::Error((input, ErrorKind::Alpha))
-    );
-}
-
-pub fn _symbol(symbol_txt: &str) -> impl Fn(&Lexes) -> R<Lex> {
-    |input: &Lexes| {
-        // TODO fixup
-        return _e(input);
-    }
-}
-
-pub fn _name(input: &Lexes) -> R<Lex> {
-    // TODO fixup
-    return _e(input);
 }
 
 // pub fn parse_stat(input: &Lexes) -> R<Stat> {
@@ -153,34 +115,30 @@ pub fn _name(input: &Lexes) -> R<Lex> {
 // }
 
 	// retstat ::= return [explist] [‘;’]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Retstat {
     pub return_expr: Option<Exprlist>
 }
 
-pub fn parse_retstat(input: &Lexes) -> R<Retstat> {
-    return _e(input);
-}
-
 	// label ::= ‘::’ Name ‘::’
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Label {
     pub name: Name
 }
 	// funcname ::= Name {‘.’ Name} [‘:’ Name]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Funcname {
     pub first_name_component: Name,
     pub other_name_components: Vec<Name>,
     pub method_component: Option<Name>,
 }
 	// varlist ::= var {‘,’ var}
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Varlist {
     pub vars: Vec<Var>
 }
 	// var ::=  Name | prefixexp ‘[’ exp ‘]’ | prefixexp ‘.’ Name 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Var {
     N(Name),
     ArrAccess(Prefixexpr, Expr),
@@ -193,7 +151,8 @@ pub type Exprlist = Vec<Expr>;
 
 	// exp ::=  nil | false | true | Numeral | LiteralString | ‘...’ | functiondef | 
 	// 	 prefixexp | tableconstructor | exp binop exp | unop exp 
-#[derive(Debug, PartialEq)]
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Nil,
     False, 
@@ -209,26 +168,22 @@ pub enum Expr {
     UnOp(UnaryOperator, Box<Expr>),
 }
 
-pub fn parse_expr(input: &Lexes) -> R<Expr>{
-    return _e(input);
-}
-
 	// prefixexp ::= var | functioncall | ‘(’ exp ‘)’
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Prefixexpr {
     V(Box<Var>),
     // functioncall ::=  prefixexp args | prefixexp ‘:’ Name args 
     Call(Box<Funccall>),
     ParendExpr(Expr)
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Funccall {
     pub expr: Prefixexpr,
     pub command_name: Option<String>,
     pub args: Args
 }
 	// args ::=  ‘(’ [explist] ‘)’ | tableconstructor | LiteralString 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Args {
     List(Option<Exprlist>),
     Table(Tableconstructor),
@@ -236,13 +191,13 @@ pub enum Args {
 }
 
 	// funcbody ::= ‘(’ [parlist] ‘)’ block end
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Funcbody {
     pub parlist: Option<Parlist>,
     pub body: Block,
 }
 	// parlist ::= namelist [‘,’ ‘...’] | ‘...’
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Parlist {
     pub namelist: Namelist,
     pub has_ellipsis: bool
@@ -254,7 +209,7 @@ pub type Tableconstructor = Option<Fieldlist>;
 pub type Fieldlist = Vec<Field>;
 
 	// field ::= ‘[’ exp ‘]’ ‘=’ exp | Name ‘=’ exp | exp
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Field {
     Bracketed(Expr, Expr),
     Named(Name, Expr),

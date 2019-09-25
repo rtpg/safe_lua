@@ -5,7 +5,6 @@ use lex::{
 };
 use parse::nom::sequence::tuple;
 use parse::nom::sequence::separated_pair;
-use parse::nom::character::complete::one_of;
 use parse::nom::multi::{
     many1,
     separated_list
@@ -20,14 +19,11 @@ use parse::nom::sequence::{
     delimited,
 };
 use parse::nom::multi::many0;
-use parse::nom::character::complete::none_of;
-use parse::nom::character::complete::char as char_parse;
 use ast;
 use lex::IStream;
 
 use parse::nom::{
     IResult,
-    bytes::complete::tag,
     branch::{
         alt,
     },
@@ -36,8 +32,6 @@ use parse::nom::{
     },
     Err,
     error::ErrorKind,
-    AsBytes,
-    Compare,
 };
 
 
@@ -49,11 +43,13 @@ use parse::nom::{
 
 // }
 
+#[allow(dead_code)]
 fn chunk(i: &IStream) -> IResult<&IStream, ast::Chunk> {
     let (i, bl) = block(i)?;
     return Ok((i, ast::Chunk {block: bl}));
 }
 
+#[allow(dead_code)]
 fn num_component(i: char) -> bool {
     return i.is_numeric();
 }
@@ -336,7 +332,7 @@ fn retstat(i: &IStream) -> IResult<&IStream, ast::Retstat>{
 }
 
 fn block(i: &IStream) -> IResult<&IStream, ast::Block> {
-    let (i, stats) = many0(stat)(i)?;
+    let (i, stats) = many1(stat)(i)?;
     let (i, m_r) = opt(retstat)(i)?;
     Ok((i, ast::Block {
         stats: stats,
@@ -445,7 +441,13 @@ mod tests {
 
     #[test]
     fn test_full_parse(){
-
+        let input = r#"
+3
+        "#;
+        let (_, lexed) = lex_all(input).unwrap();
+        println!("Successfully lexed");
+        stat(&lexed).unwrap();
+        // parse(input) ;
     }
     #[test]
     fn test_parse(){

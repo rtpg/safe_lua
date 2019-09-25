@@ -2,7 +2,6 @@
 #[allow(dead_code)]
 #[allow(unused_imports)]
 use nom::character::complete::none_of;
-use nom::combinator::opt;
 use nom::sequence::preceded;
 use nom::combinator::map;
 use nom::multi::{many0, many1};
@@ -17,11 +16,7 @@ use nom::{
     error::ErrorKind,
     IResult,
     bytes::complete::tag,
-    combinator::peek,
 };
-use std::fs::File;
-use std::io::Read;
-use std::iter::FromIterator;
 
 pub type IStream = [Lex];
 pub type ISlice = [Lex];
@@ -245,18 +240,21 @@ pub fn lex_all(i: &str) -> IResult<&str, Vec<Lex>> {
 mod tests {
     use super::*;
 
+    use std::fs::File;
+    use std::io::Read;
+
     #[test]
     fn test_parsing_constructs(){
         // confirm that we can actually parse the lua test files
         let mut file = File::open("lua_tests/constructs.lua").unwrap();
         let mut contents = String::new();
         dbg!(&file);
-        file.read_to_string(&mut contents);
+        file.read_to_string(&mut contents).unwrap();
         let parse_result = lex_all(contents.as_str());
         match parse_result {
             Ok((remaining_input, _)) => assert_eq!(remaining_input, ""),
             Err(_) => {
-                dbg!(parse_result);
+                dbg!(parse_result).unwrap();
                 panic!("Parse failure");
             }
         }

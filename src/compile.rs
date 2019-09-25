@@ -5,8 +5,18 @@
  */
 use ast;
 use lex;
+use std::collections::HashMap;
+
+// jump target shape
+#[derive(Clone, Debug)]
+pub enum JumpTarget {
+    CodeLoc(usize),
+    JumpTable(usize),
+}
 
 // bytecode commands
+#[allow(non_camel_case_types, dead_code)]
+#[derive(Debug)]
 pub enum BC {
     PUSH_NIL,
     PUSH_FALSE, PUSH_TRUE,
@@ -18,6 +28,12 @@ pub enum BC {
     PUSH_VAL_BY_NAME(String),
     ARRAY_ACCESS,
     DOT_ACCESS,
+
+    POP,
+
+    NOOP,
+
+    GOTO(String),
 
     // operators
     BINOP(String), UNOP(String),
@@ -36,24 +52,48 @@ pub enum BC {
     RETURN_VALUE,
     BUILD_LIST(usize),
     BUILD_FUNCTION,
+
+    // jump commands
+    JUMP(JumpTarget),
+    // pop the stack and jump if the value is truthy
+    JUMP_TRUE(JumpTarget),
+    JUMP_FALSE(JumpTarget),
 }
 
 // code objects
 // they can include references to other code objects
+#[derive(Debug)]
 pub struct CodeObj {
     // the actual commands to run when we want to run this code block
     bytecode: Vec<BC>,
     // references to other code blocks
     // (for example code blocks for funciton definitions)
     inner_code: Vec<CodeObj>,
+    // positions in the bytecode for jump labels
+    labels: HashMap<String, usize>,
+    // jump targets, used for looping etc
+    // jump_target[i] stores the code location to jump to
+    jump_target: Vec<Option<usize>>,
 }
 
 
 pub trait Code {
     // emit bytecode
+    // return 
     fn emit(&mut self, elt: BC);
+
+    // emit a noop and provide a jump target for later
+    fn emit_jump_location(&mut self) -> JumpTarget;
     // save an inner code object, and return its index
     fn write_inner_code(&mut self, CodeObj) -> usize;
+    // add a label
+    fn add_label(&mut self, String);
+    // prep a forward jump
+    // this adds a jump command to a future line in bytecode
+    // and then closes it out with set forward jump target
+    fn prep_fwd_jump(&mut self) -> JumpTarget;
+    // emit a NOOP and register the jump location
+    fn emit_fwd_jump_location(&mut self, JumpTarget);
 }
 
 impl Code for CodeObj {
@@ -61,16 +101,89 @@ impl Code for CodeObj {
         self.bytecode.push(elt);
     }
 
+    fn emit_jump_location(&mut self) -> JumpTarget {
+        self.emit(BC::NOOP);
+        let loc = self.bytecode.len() - 1;
+        return JumpTarget::CodeLoc(loc);
+    }
+
+    fn prep_fwd_jump(&mut self) -> JumpTarget {
+        self.jump_target.push(None);
+        let jmp_idx = self.jump_target.len() - 1;
+        return JumpTarget::JumpTable(jmp_idx);
+    }
+
+    fn emit_fwd_jump_location(&mut self, target: JumpTarget){
+        match target {
+            JumpTarget::CodeLoc(_) => {
+                panic!("Forward jumps are for forward jumps!")
+            },
+            JumpTarget::JumpTable(i) => {
+                // here we need to register the location in our jump table
+                self.emit(BC::NOOP);
+                let loc = self.bytecode.len() - 1;
+                self.jump_target[i] = Some(loc);
+            }
+        }
+    }
     fn write_inner_code(&mut self, code: CodeObj) -> usize {
         // TODO is this safe?
         self.inner_code.push(code);
         // TODO not sure if this is the right thing to return either
         return self.inner_code.len() - 1;
     }
+
+    fn add_label(&mut self, name: String) {
+        // we'll add a noop command here to avoid any issues
+        self.emit(BC::NOOP);
+        let jmp_position = self.bytecode.len() - 1;
+        self.labels.insert(name, jmp_position);
+    }
 }
 
-pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
 
+pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
+    use ast::Stat::*;
+
+    match stat {
+        Semicol => {},
+        Call(call) => {
+            // we'll push the value, then pop it
+            push_funccall(call, code);
+            code.emit(BC::POP);
+        },
+        Label(name) => {
+            code.add_label(name);
+        },
+        Goto(name) => {
+            code.emit(
+                BC::GOTO(name)
+            )
+        },
+        Do(block) => {
+            compile_block(block, code);
+        },
+        While(expr, block) => {
+            // evaluate an expression
+            // if it's true, evaluate the block then jump backwards
+            // if it's false, skip over the block
+            let start_position = code.emit_jump_location();
+            // first, we evaluate the expression
+            push_expr(expr, code);
+            // if it's false we jump to the end
+            let jump_to_end = code.prep_fwd_jump();
+            code.emit(BC::JUMP_FALSE(jump_to_end.clone()));
+            // else it's true, so we can evaluate the block
+            compile_block(block, code);
+            // if it was true, we jump back to the start position
+            code.emit(BC::JUMP(start_position));
+            // after jump location...
+            code.emit_fwd_jump_location(jump_to_end);
+        },
+        _ => {
+            panic!("Not implemented yet");
+        }
+    }
 }
 
 pub fn push_expr(expr: ast::Expr, code: &mut impl Code){
@@ -120,6 +233,8 @@ pub fn new_code_obj() -> CodeObj {
     return CodeObj {
         bytecode: Vec::new(),
         inner_code: Vec::new(),
+        labels: HashMap::new(),
+        jump_target: Vec::new(),
     }
 }
 
@@ -332,6 +447,8 @@ pub fn compile_block(b: ast::Block, code: &mut impl Code) {
         }
     }
 }
-pub fn compile(parsed_block: ast::Block) -> Vec<BC>{
-    return Vec::new();
+pub fn compile(parsed_block: ast::Block) -> CodeObj {
+    let mut code = new_code_obj();
+    compile_block(parsed_block, &mut code);
+    return code;
 }
