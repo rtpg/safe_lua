@@ -1,8 +1,11 @@
 extern crate nom;
+extern crate nom_recursive;
 use lex::{
     ISlice,
     lex_all
 };
+use self::nom_recursive::recursive_parser;
+
 use parse::nom::sequence::tuple;
 use parse::nom::sequence::separated_pair;
 use parse::nom::multi::{
@@ -156,6 +159,7 @@ fn funccall(i: &IStream) -> IResult<&IStream, ast::Funccall> {
                                  command_name: maybe_name,
                                  args: a}));
 }
+
 fn prefixexp(i: &IStream) -> IResult<&IStream, ast::Prefixexpr> {
     return alt((
         map(var, |v| ast::Prefixexpr::V(Box::new(v))),
@@ -200,14 +204,14 @@ fn var(i: &IStream) -> IResult<&IStream, ast::Var>{
                 )),
             |(p, e)| ast::Var::ArrAccess(p, e),
         ),
-        map(
-            pair(
-                prefixexp,
-                preceded(kwd("."), name)
-            ),
-            |(p, n)| ast::Var::DotAccess(p, n),
-        ),
-        map(name, |n| ast::Var::N(n))
+        // map(
+        //     pair(
+        //         prefixexp,
+        //         preceded(kwd("."), name)
+        //     ),
+        //     |(p, n)| ast::Var::DotAccess(p, n),
+        // ),
+        map(name, |n| ast::Var::N(n)),
     ))(i);
 }
 fn varlist(i: &IStream) -> IResult<&IStream, ast::Varlist> {
@@ -220,10 +224,11 @@ fn varlist(i: &IStream) -> IResult<&IStream, ast::Varlist> {
 fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
     return alt((
         map(kwd(";"), |_| ast::Stat::Semicol),
-        map(
-            separated_pair(varlist, kwd("="), exprlist),
-            |(varlist, explist)| ast::Stat::Eql(varlist, explist)
-        ),
+        // map(
+        //     separated_pair(varlist, kwd("="), exprlist),
+        //     |(varlist, explist)| ast::Stat::Eql(varlist, explist)
+        // ),
+        // FFFFFFFFFFFFFFF
         // map(
         //     funccall,
         //     |f| ast::Stat::Call
@@ -440,13 +445,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_varlist(){
+        let input = r#"
+a
+        "#;
+        let (_, lexed) = lex_all(input).unwrap();
+        dbg!(var(&lexed)).unwrap();
+    }
+    #[test]
     fn test_full_parse(){
         let input = r#"
-3
+local x = 3;
         "#;
         let (_, lexed) = lex_all(input).unwrap();
         println!("Successfully lexed");
-        stat(&lexed).unwrap();
+        dbg!(stat(&lexed)).unwrap();
         // parse(input) ;
     }
     #[test]
