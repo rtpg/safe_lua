@@ -1,10 +1,11 @@
 extern crate nom;
 extern crate nom_recursive;
+extern crate nom_packrat;
+
 use lex::{
     ISlice,
     lex_all
 };
-use self::nom_recursive::recursive_parser;
 
 use parse::nom::sequence::tuple;
 use parse::nom::sequence::separated_pair;
@@ -18,8 +19,8 @@ use parse::nom::combinator::opt;
 
 use parse::nom::sequence::{
     preceded,
+    terminated,
     pair,
-    delimited,
 };
 use parse::nom::multi::many0;
 use ast;
@@ -92,14 +93,24 @@ fn name(i: &IStream) -> IResult<&ISlice, String> {
 fn kwd<'a>(tag: &'a str) -> impl Fn(&'a IStream) -> IResult<&'a IStream, lex::Lex> {
     move |i: &IStream| {
         let s = tag.clone();
-        match i.get(0){
+        let token = i.get(0);
+        match token{
             Some(lex::Lex::Keyword(_s)) => {
-                if &s == _s {
+                if s == _s {
                     return Ok((&i[1..], lex::Lex::Keyword(_s.to_string())))
                 } else {
                     return Err(Err::Error((i, ErrorKind::Tag)))
                 }
             },
+            // HACK I fucked up and made keywords and symbols
+            // just cast everything to a keyword
+            Some(lex::Lex::Symbol(_s)) => {
+                if s == _s {
+                    return Ok((&i[1..], lex::Lex::Keyword(_s.to_string())))
+                } else {
+                    return Err(Err::Error((i, ErrorKind::Tag)))
+                }
+            }
             _ => return Err(
                 Err::Error((i, ErrorKind::Tag))
             )
@@ -132,7 +143,7 @@ fn args(i: &IStream) -> IResult<&IStream, ast::Args> {
         map(table_constructor, |t| ast::Args::Table(t)),
         map(literal_string_parser, |s| ast::Args::Literal(s)),
         map(
-            delimited(
+            surrounded(
                 kwd("("), opt(exprlist), kwd(")")
             ),
             |maybe_e| ast::Args::List(maybe_e),
@@ -141,7 +152,7 @@ fn args(i: &IStream) -> IResult<&IStream, ast::Args> {
 }
 
 fn funcbody(i: &IStream) -> IResult<&IStream, ast::Funcbody> {
-    let (i, m_parlist) = delimited(
+    let (i, m_parlist) = surrounded(
         kwd("("),
         opt(parlist),
         kwd(")"))(i)?;
@@ -160,23 +171,54 @@ fn funccall(i: &IStream) -> IResult<&IStream, ast::Funccall> {
                                  args: a}));
 }
 
-fn prefixexp(i: &IStream) -> IResult<&IStream, ast::Prefixexpr> {
+fn surrounded<T, U, V, I, O, O1, O2>(
+    left_parser: T, inner: U, right_parser: V) -> impl Fn(I) -> IResult<I, O>
+ where T: Fn(I) -> IResult<I, O1>,
+       U: Fn(I) -> IResult<I, O>,
+       V: Fn(I) -> IResult<I, O2> {
+    return preceded(
+        left_parser, terminated(inner, right_parser)
+    );
+}
+
+fn prefix(i: &IStream) -> IResult<&IStream, ast::Prefix> {
     return alt((
-        map(var, |v| ast::Prefixexpr::V(Box::new(v))),
+        map(surrounded(kwd("("), expr, kwd(")"),),
+             |e| ast::Prefix::ParenedExpr(e)),
+        map(name, |n| ast::Prefix::Varname(n)),
+    ))(i);
+}
+
+fn suffix(i: &IStream) -> IResult<&IStream, ast::Suffix> {
+    use ast::Suffix::*;
+    return alt((
+        map(preceded(kwd("."), name),
+            |n| DotAccess(n)),
+        map(surrounded(kwd("["), expr, kwd("]")),
+            |e| ArrAccess(e)),
         map(
-            funccall,
-            |f| ast::Prefixexpr::Call(Box::new(f)),
-        ),
-        map(
-            delimited(
-                kwd("("),
-                expr,
-                kwd(")"),
+            pair(
+                opt(
+                    preceded(
+                        kwd(":"),
+                        name
+                    )
+                ),
+                args,
             ),
-            |e| ast::Prefixexpr::ParendExpr(e),
+            |(opt_name, a)| MethodCall(opt_name, a)
         )
     ))(i);
 }
+fn prefixexp(i: &IStream) -> IResult<&IStream, ast::Prefixexpr> {
+    let (i, pref) = prefix(i)?;
+    let (i, suffixes) = many0(suffix)(i)?;
+    return Ok((i, ast::Prefixexpr {
+        prefix: pref,
+        suffixes: suffixes
+    }));
+}
+
 
 fn namelist(i: &IStream) -> IResult<&IStream, ast::Namelist> {
     return separated_list(kwd(","), name)(i);
@@ -197,20 +239,20 @@ fn var(i: &IStream) -> IResult<&IStream, ast::Var>{
     return alt((
         map(
             pair(prefixexp,
-                delimited(
+                surrounded(
                     kwd("["),
                     expr,
                     kwd("]")
                 )),
             |(p, e)| ast::Var::ArrAccess(p, e),
         ),
-        // map(
-        //     pair(
-        //         prefixexp,
-        //         preceded(kwd("."), name)
-        //     ),
-        //     |(p, n)| ast::Var::DotAccess(p, n),
-        // ),
+        map(
+            pair(
+                prefixexp,
+                preceded(kwd("."), name)
+            ),
+            |(p, n)| ast::Var::DotAccess(p, n),
+        ),
         map(name, |n| ast::Var::N(n)),
     ))(i);
 }
@@ -224,17 +266,19 @@ fn varlist(i: &IStream) -> IResult<&IStream, ast::Varlist> {
 fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
     return alt((
         map(kwd(";"), |_| ast::Stat::Semicol),
-        // map(
-        //     separated_pair(varlist, kwd("="), exprlist),
-        //     |(varlist, explist)| ast::Stat::Eql(varlist, explist)
-        // ),
-        // FFFFFFFFFFFFFFF
-        // map(
-        //     funccall,
-        //     |f| ast::Stat::Call
-        // ),
         map(
-            delimited(kwd("::"), name, kwd("::")),
+            separated_pair(varlist, kwd("="), exprlist),
+            |(varlist, explist)| ast::Stat::Eql(varlist, explist)
+        ),
+        // FFFFFFFFFFFFFFF
+        // prefix expressions capture function calls
+        // this is more open than lua's normal syntax
+        map(
+            expr,
+            |e| ast::Stat::RawExpr(e),
+        ),
+        map(
+            surrounded(kwd("::"), name, kwd("::")),
             |name| ast::Stat::Label(name),
         ),
         map(
@@ -246,7 +290,16 @@ fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
             |n| ast::Stat::Goto(n),
         ),
         map(
-            delimited(
+            pair(
+                surrounded(
+                   kwd("repeat"),block,kwd("until")
+                ),
+                expr,
+            ),
+            |(b, e)| ast::Stat::Repeat(b, e)
+        ),
+        map(
+            surrounded(
                 kwd("do"),
                 block,
                 kwd("end")
@@ -256,17 +309,17 @@ fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
         map(
             pair(
                 preceded(kwd("while"), expr),
-                delimited(kwd("do"), block, kwd("end"))
+                surrounded(kwd("do"), block, kwd("end"))
             ),
             |(e, b)| ast::Stat::While(e, b),
         ),
         map(
             tuple((
-                delimited(kwd("if"), expr, kwd("then")),
+                surrounded(kwd("if"), expr, kwd("then")),
                 block,
                 many0(
                     pair(
-                        delimited(kwd("elseif"), expr, kwd("then")),
+                        surrounded(kwd("elseif"), expr, kwd("then")),
                         block
                     )
                 ),
@@ -282,20 +335,20 @@ fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
         ),
         map(
             tuple((
-                delimited(kwd("for"), name, kwd("=")),
+                surrounded(kwd("for"), name, kwd("=")),
                 separated_pair(expr, kwd(","), expr),
                 opt(
                     preceded(kwd(","), expr)
                 ),
-                delimited(kwd("do"), block, kwd("end"))
+                surrounded(kwd("do"), block, kwd("end"))
             )),
             |(n, (e1, e2), m_e3, b)| ast::Stat::For(n, e1, e2, m_e3, b)
         ),
         map(
             tuple((
-                delimited(kwd("for"), namelist, kwd("in")),
+                surrounded(kwd("for"), namelist, kwd("in")),
                 exprlist,
-                delimited(kwd("do"), block, kwd("end")),
+                surrounded(kwd("do"), block, kwd("end")),
             )),
             |(n, el, b)| ast::Stat::ForIn(n, el, b)
         ),
@@ -328,7 +381,7 @@ fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
 
 // }
 fn retstat(i: &IStream) -> IResult<&IStream, ast::Retstat>{
-    let (i, m_elist) = delimited(
+    let (i, m_elist) = surrounded(
         kwd("return"),
         opt(exprlist),
         opt(kwd(";"))
@@ -337,7 +390,7 @@ fn retstat(i: &IStream) -> IResult<&IStream, ast::Retstat>{
 }
 
 fn block(i: &IStream) -> IResult<&IStream, ast::Block> {
-    let (i, stats) = many1(stat)(i)?;
+    let (i, stats) = many0(stat)(i)?;
     let (i, m_r) = opt(retstat)(i)?;
     Ok((i, ast::Block {
         stats: stats,
@@ -358,7 +411,7 @@ fn field(i: &IStream) -> IResult<&IStream, ast::Field> {
     // '[' exp ']' '=' exp
     let bracked_field = map(
         pair(
-            delimited(kwd("["), expr, kwd("]")),
+            surrounded(kwd("["), expr, kwd("]")),
             preceded(kwd("="), expr)
         ),
         | (e1, e2) | ast::Field::Bracketed(e1, e2)
@@ -393,8 +446,82 @@ fn table_constructor(i: &IStream) -> IResult<&IStream, ast::Tableconstructor> {
     );
 }
 
-fn binary_op(i: &IStream) -> IResult<&IStream, ast::Expr> {
-    let (i, left_expr) = expr(i)?;
+fn expr_constants(i: &IStream) -> IResult<&IStream, ast::Expr> {
+    // return expr constants or parenthesized
+    return alt((
+        map(kwd("nil"), |_| ast::Expr::Nil),
+        map(kwd("true"), |_| ast::Expr::True),
+        map(kwd("false"), |_| ast::Expr::False),
+        num_parser,
+        map(literal_string_parser, |s| ast::Expr::LiteralString(s)),
+        map(kwd("..."), |_| ast::Expr::Ellipsis),
+        map(table_constructor, |t| ast::Expr::Tbl(t)),
+        function_def,
+        surrounded(
+            kwd("("), expr, kwd(")")
+        ),
+    ))(i);
+}
+
+fn unary_op(i: &IStream) -> IResult<&IStream, String>{
+    let (i, result) = alt((
+        kwd("#"),
+        kwd("-"),
+        kwd("not"),
+        kwd("~"),
+    ))(i)?;
+
+    match result {
+        lex::Lex::Keyword(k) => {
+            return Ok((i, k));
+        },
+        _ => {
+            panic!("Impossible code path");
+        }
+    }
+}
+
+fn expr(i: &IStream) -> IResult<&IStream, ast::Expr>{
+    // parse out any unary operators and then read inner expressions;
+
+    let (i, mut unops) = many0(unary_op)(i)?;
+    let (i, inner_expr) = expr2(i)?;
+
+    let mut return_result = inner_expr;
+    unops.reverse();
+    for unop in unops {
+        return_result = ast::Expr::UnOp(
+            unop,
+            Box::new(return_result)
+        );
+    }
+
+    return Ok((i, return_result));
+}
+
+fn expr2(i: &IStream) -> IResult<&IStream, ast::Expr> {
+    // basically, parse binary opereators since they're 
+    // left recursive
+    let (i, first_expr) = expr_consume(i)?;
+    let (i, bin_op_list) = many0(binop_right)(i)?;
+    if bin_op_list.len() == 0 {
+        // no binary operations, return the expression
+        return Ok((i, first_expr));
+    } else {
+        // we need to fold the binary operator
+        let mut result_expression = first_expr;
+        for (operator, right_exp) in bin_op_list {
+            result_expression = ast::Expr::BinOp(
+                Box::new(result_expression),
+                operator,
+                Box::new(right_exp),
+            )
+        }
+        return Ok((i, result_expression));
+    }
+}
+
+fn binop_right(i: &IStream) -> IResult<&IStream, (ast::BinaryOperator, ast::Expr)> {
     let (i, operator) = alt((
         kwd("//"),kwd(">>"),kwd("<<"),kwd(".."),
         kwd("<="),kwd(">="),kwd("=="),kwd("~="),
@@ -403,24 +530,14 @@ fn binary_op(i: &IStream) -> IResult<&IStream, ast::Expr> {
         kwd("&"), kwd("~"), kwd("|"), kwd("<"), kwd(">"),
     ))(i)?;
     let (i, right_expr) = expr(i)?;
-    return Ok((i, ast::Expr::BinOp(Box::new(left_expr), 
-                                   operator, 
-                                   Box::new(right_expr))));
+    return Ok((i,
+    (operator, right_expr)));
 }
 
-fn expr(i: &IStream) -> IResult<&IStream, ast::Expr> {
-
+fn expr_consume(i: &IStream) -> IResult<&IStream, ast::Expr> {
     return alt((
-        map(kwd("nil"), |_| ast::Expr::Nil),
-        map(kwd("true"), |_| ast::Expr::True),
-        map(kwd("false"), |_| ast::Expr::False),
-        num_parser,
-        map(literal_string_parser, |s| ast::Expr::LiteralString(s)),
-        map(kwd("..."), |_| ast::Expr::Ellipsis),
-        function_def,
-        // TODO Pref
-        map(table_constructor, |t| ast::Expr::Tbl(t)),
-        binary_op, 
+        expr_constants,
+        map(prefixexp, |p| ast::Expr::Pref(Box::new(p))),
         // TOOD UnOp
     ))(i);
 }
@@ -428,12 +545,14 @@ fn expr(i: &IStream) -> IResult<&IStream, ast::Expr> {
 pub fn parse(input: &str) -> ast::Block { 
     let (input, tokens) = lex_all(input).unwrap();
     if input.len() > 0 {
-        dbg!(input);
+        dbg!(&input[..20]);
         panic!("remaining input");
     }
     let (remaining_tokens, b) = block(&tokens).unwrap();
     if remaining_tokens.len() > 0 {
-        dbg!(remaining_tokens);
+        for t in &remaining_tokens[..10]{
+            dbg!(t);
+        }
         panic!("Remaining tokens");
     }
     return b;
@@ -444,13 +563,112 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
+    use std::fs::File;
+    use std::io::Read;
+
+    macro_rules! assert_parse_all {
+        ($parser:expr, $input:expr) => {
+            let (remaining_input, lexed) = lex_all($input).unwrap();
+            if remaining_input.len() != 0 {
+                dbg!(&remaining_input[..10]);
+                panic!("Input remained from lexing")
+            }
+            let (remaining_tokens, _) = $parser(&lexed).unwrap();
+            if remaining_tokens.len() != 0 {
+                dbg!(&remaining_tokens[..10]);
+                panic!("Input remained from parsing")
+            };
+        };
+    }
     #[test]
-    fn test_varlist(){
+    fn test_expr_parse(){
         let input = r#"
-a
+f(x, 3 + 5, y[z].foo.bar)
         "#;
-        let (_, lexed) = lex_all(input).unwrap();
-        dbg!(var(&lexed)).unwrap();
+
+        assert_parse_all!(
+            expr,
+            r#"
+f(x, 3 + 5, y[z].foo.bar)
+            "#
+        );
+
+        assert_parse_all!(
+            suffix,
+            r#"
+(x, 3)
+            "#
+        );
+
+        assert_parse_all!(
+            exprlist,
+            "x.y[z],y,3"
+        );
+
+        assert_parse_all!(
+            expr,
+            "3"
+        );
+
+        assert_parse_all!(
+            expr,
+            "print \"testing syntax\""
+        );
+
+        assert_parse_all!(
+            args,
+            "\"some string \""
+        );
+
+        assert_parse_all!(
+            expr,
+            "print \"testing syntax\""
+        );
+
+        assert_parse_all!(
+            block,
+            r#"
+; do ; a = 3; assert(a == 3) end;
+            "#
+        );
+
+        assert_parse_all!(
+            expr,
+            "2.0^-2 == 1/4 and -2^- -2 == - - -4"
+        );
+
+        assert_parse_all!(
+            retstat,
+            "return i, 'jojo';"
+        );
+
+        assert_parse_all!(
+            stat,
+            r#"
+           if type(i) ~= 'number' then return i,'jojo'; end 
+            "#
+        );
+
+        assert_parse_all!(
+            block,
+            r#"
+  if type(i) ~= 'number' then return i,'jojo'; end;
+  if i > 0 then return i, f(i-1); end;
+            "#
+        );
+
+        assert_parse_all!(
+            function_def,
+            r#"
+            function (i)
+  if i < 10 then return 'a'
+  elseif i < 20 then return 'b'
+  elseif i < 30 then return 'c'
+  else return 8
+  end
+end
+"#
+        );
     }
     #[test]
     fn test_full_parse(){
@@ -462,6 +680,37 @@ local x = 3;
         dbg!(stat(&lexed)).unwrap();
         // parse(input) ;
     }
+
+    #[test]
+    fn test_kwd_parse(){
+        let lexed = lex_all(",").unwrap().1;
+        assert_eq!(
+            kwd(",")(&lexed),
+            Ok((
+                vec![].as_ref(),
+                lex::Lex::Keyword(",".to_string())
+            ))
+        );
+    }
+
+    macro_rules! file_contents {
+        ($filename:expr, $into_var:ident) => {
+            let mut $into_var = String::new();
+            {
+                let mut file = File::open($filename).unwrap();
+                file.read_to_string(&mut $into_var).unwrap();
+            }
+        };
+    }
+
+    #[test]
+    fn test_parsing_of_lua_files(){
+        file_contents!("lua_tests/constructs.lua", contents);
+
+        // parse panics on failures so....
+        parse(contents.as_str());
+    }
+
     #[test]
     fn test_parse(){
         let l: Vec<lex::Lex> = lex_all("nil").unwrap().1;
@@ -483,4 +732,6 @@ local x = 3;
             ))
         )
     }
+
+    
 }

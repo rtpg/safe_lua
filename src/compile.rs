@@ -147,9 +147,9 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
 
     match stat {
         Semicol => {},
-        Call(call) => {
+        RawExpr(e) => {
             // we'll push the value, then pop it
-            push_funccall(call, code);
+            push_expr(e, code);
             code.emit(BC::POP);
         },
         Label(name) => {
@@ -313,12 +313,35 @@ pub fn push_table(ctr: ast::Tableconstructor, code: &mut impl Code){
 }
 
 pub fn push_prefixexpr(pexpr: ast::Prefixexpr, code: &mut impl Code){
-    use ast::Prefixexpr::*;
+    use ast::Prefix::*;
+    use ast::Suffix::*;
 
-    match pexpr {
-        ParendExpr(e) => push_expr(e, code),
-        Call(funccall) => push_funccall(*funccall, code),
-        V(boxed_variable) => push_variable(*boxed_variable, code),
+    match pexpr.prefix {
+        ParenedExpr(e) => push_expr(e, code),
+        Varname(n) => push_variable(
+            ast::Var::N(n), code)
+    }
+
+    for suffix in pexpr.suffixes { 
+        match suffix {
+            ArrAccess(expr) => {
+                // a[b]
+                // a is already on the stack
+                // push b
+                push_expr(expr, code);
+                code.emit(BC::ARRAY_ACCESS);
+            },
+            DotAccess(name) => {
+                // a.b
+                // a is already on the satck
+                // push b
+                code.emit(BC::PUSH_STRING(name));
+                code.emit(BC::DOT_ACCESS);
+            },
+            MethodCall(_name, _args) => {
+                panic!("Not implemented method calls yet")
+            }
+        }
     }
 }
 

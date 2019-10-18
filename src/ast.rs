@@ -35,8 +35,9 @@ pub enum Stat {
     Semicol,
 	// 	 varlist ‘=’ explist |
     Eql(Varlist, Exprlist),
-	// 	 functioncall | 
-    Call(Funccall),
+    // the following is us being more open to thing
+	// 	 rawexpr | 
+    RawExpr(Expr),
 	// 	 label | 
     Label(Name),
 	// 	 break | 
@@ -170,12 +171,27 @@ pub enum Expr {
 
 	// prefixexp ::= var | functioncall | ‘(’ exp ‘)’
 #[derive(Debug, Clone, PartialEq)]
-pub enum Prefixexpr {
-    V(Box<Var>),
-    // functioncall ::=  prefixexp args | prefixexp ‘:’ Name args 
-    Call(Box<Funccall>),
-    ParendExpr(Expr)
+pub struct Prefixexpr {
+    pub prefix: Prefix,
+    pub suffixes: Vec<Suffix>,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Prefix {
+    ParenedExpr(Expr),
+    Varname(Name),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Suffix {
+    // a.b
+    DotAccess(Name),
+    // a[c]
+    ArrAccess(Expr),
+    // a(:b)(args)
+    MethodCall(Option<Name>, Args),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Funccall {
     pub expr: Prefixexpr,
@@ -221,7 +237,7 @@ pub enum Field {
 	// 	 ‘&’ | ‘~’ | ‘|’ | ‘>>’ | ‘<<’ | ‘..’ | 
 	// 	 ‘<’ | ‘<=’ | ‘>’ | ‘>=’ | ‘==’ | ‘~=’ | 
 	// 	 and | or
-type BinaryOperator = Lex;
-type UnaryOperator = String;
+pub type BinaryOperator = Lex;
+pub type UnaryOperator = String;
 	// unop ::= ‘-’ | not | ‘#’ | ‘~’
-type Name = String;
+pub type Name = String;
