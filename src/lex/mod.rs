@@ -3,11 +3,11 @@
 #[allow(unused_imports)]
 use nom::character::complete::none_of;
 use nom::sequence::preceded;
-use nom::combinator::{map, opt};
+use nom::combinator::map;
 use nom::multi::{many0, many1};
 use nom::character::complete::{
     char as char_parse,
-    digit1};
+};
 use nom::character::is_alphanumeric;
 use nom::character::is_alphabetic;
 use nom::branch::alt;
@@ -246,6 +246,17 @@ mod tests {
         assert_eq!(
             lex_all("hi -- hi there"),
             Ok(("", vec![Lex::Name("hi".to_string())]))
+        );
+
+        assert_eq!(
+            lex_all("string.format(a)"),
+            Ok(("",
+                vec![Lex::Name("string".to_string()),
+                    Lex::Symbol(".".to_string()),
+                    Lex::Name("format".to_string()),
+                    Lex::Symbol("(".to_string()),
+                    Lex::Name("a".to_string()),
+                    Lex::Symbol(")".to_string())]))
         );
 
         assert_eq!(

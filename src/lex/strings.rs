@@ -150,6 +150,7 @@ pub fn control_character(input: &str) -> IResult<&str, char> {
     return alt((
         map(char_parse('n'), |_| '\n'),
         map(char_parse('\\'), |_| '\\'),
+        anychar,
     ))(input);
 }
 

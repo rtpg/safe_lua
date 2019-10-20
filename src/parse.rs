@@ -10,7 +10,6 @@ use lex::{
 use parse::nom::sequence::tuple;
 use parse::nom::sequence::separated_pair;
 use parse::nom::multi::{
-    many1,
     separated_list
 };
 use lex;
@@ -646,6 +645,23 @@ f(x, 3 + 5, y[z].foo.bar)
             stat,
             r#"
            if type(i) ~= 'number' then return i,'jojo'; end 
+            "#
+        );
+
+        assert_parse_all!(
+            expr,
+            "string.format(prog, s, s)"
+        );
+        
+        assert_parse_all!(
+            block,
+            r#"
+              local s = v[1]
+    local p = load(string.format(prog, s, s), "")
+    IX = false
+    assert(p() == v[2] and IX == not not v[2])
+    i = i + 1
+    if i % 60000 == 0 then print('+') en  
             "#
         );
 
