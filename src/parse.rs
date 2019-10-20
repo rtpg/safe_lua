@@ -171,7 +171,7 @@ fn funccall(i: &IStream) -> IResult<&IStream, ast::Funccall> {
                                  args: a}));
 }
 
-fn surrounded<T, U, V, I, O, O1, O2>(
+pub fn surrounded<T, U, V, I, O, O1, O2>(
     left_parser: T, inner: U, right_parser: V) -> impl Fn(I) -> IResult<I, O>
  where T: Fn(I) -> IResult<I, O1>,
        U: Fn(I) -> IResult<I, O>,
