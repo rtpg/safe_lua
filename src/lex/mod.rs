@@ -1,3 +1,6 @@
+
+use super::*;
+
 // loads of false positives from this decorator..
 #[allow(dead_code)]
 #[allow(unused_imports)]
@@ -18,11 +21,14 @@ use nom::{
     bytes::complete::tag,
 };
 
+use std::collections::HashSet;
+
 pub type IStream = [Lex];
 pub type ISlice = [Lex];
 
 mod num;
 mod strings;
+
 
 /**
 
@@ -83,10 +89,26 @@ fn _find_name_bound(input: &str) -> Option<usize> {
 //             );
 // }
 
+lazy_static! {
+pub static ref KWDS: HashSet<&'static str> = "     and       break     do        else      elseif    end
+     false     for       function  goto      if        in
+     local     nil       not       or        repeat    return
+     then      true      until     while".split_whitespace().collect();
+}
+fn _is_keyword(s: &str) -> bool {
+    return KWDS.contains(s);
+}
+
 pub fn parse_name(input: &str) -> IResult<&str, Lex> {
     match _find_name_bound(input) {
         Some(idx) => {
             let (result_name, rest_of_input ) = input.split_at(idx);
+            if _is_keyword(result_name){
+                return Err(
+                    Err::Error((input, ErrorKind::Alpha))
+                );
+            }
+
             return Ok((
                 rest_of_input,
                 Lex::Name(result_name.to_string()),
@@ -178,11 +200,11 @@ pub fn lex_all_aux(i: &str) -> IResult<&str, Vec<Lex>> {
         map(ignored_content, |_| return Lex::Ignore),
         strings::parse_string,
         num::parse_number,
+        parse_name,
         map(keyword_parse,
             |kwd: &str| return Lex::Keyword(kwd.to_string())),
         map(symbol_parse,
             |sym: &str| return Lex::Symbol(sym.to_string())),
-        parse_name,
     )))(i);
 }
 

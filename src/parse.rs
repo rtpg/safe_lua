@@ -652,7 +652,7 @@ f(x, 3 + 5, y[z].foo.bar)
             expr,
             "string.format(prog, s, s)"
         );
-        
+
         assert_parse_all!(
             block,
             r#"
@@ -661,7 +661,7 @@ f(x, 3 + 5, y[z].foo.bar)
     IX = false
     assert(p() == v[2] and IX == not not v[2])
     i = i + 1
-    if i % 60000 == 0 then print('+') en  
+    if i % 60000 == 0 then print('+') end  
             "#
         );
 
