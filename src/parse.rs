@@ -56,14 +56,19 @@ fn chunk(i: &IStream) -> IResult<&IStream, ast::Chunk> {
 fn num_component(i: char) -> bool {
     return i.is_numeric();
 }
+
+fn err<T>(i: &IStream) -> IResult<&IStream, T> {
+    return Err(
+        Err::Error((i, ErrorKind::Alpha))
+    );
+}
+
 fn num_parser(i: &IStream) -> IResult<&ISlice, ast::Expr> {
     match i.get(0) {
         Some(lex::Lex::Number(n)) => return Ok((
             &i[1..], ast::Expr::Numeral(n.to_string())
         )),
-        _ => return Err(
-                Err::Error((i, ErrorKind::Alpha))
-        )
+        _ => return err(i)
     }
 }
 
@@ -117,20 +122,42 @@ fn kwd<'a>(tag: &'a str) -> impl Fn(&'a IStream) -> IResult<&'a IStream, lex::Le
     }
 }
 
-fn parlist(i: &ISlice) -> IResult<&IStream, ast::Parlist> {
-    // WRONG doesn't handle elipsis yet
+fn parlist_w_namelist(i: &IStream) -> IResult<&IStream, ast::Parlist> {
 
     let (i, namelist) = separated_list(
         kwd(","),
         name
         )(i)?;
+    let (i, maybe_ellipsis) = opt(
+        pair(kwd(","), kwd("..."))
+    )(i)?;
+
     return Ok((
         i,
         ast::Parlist {
             namelist: namelist,
-            has_ellipsis: false,
+            has_ellipsis: maybe_ellipsis.is_some()
         }
     ));
+}
+
+fn parlist_wo_namelist(i: &IStream) -> IResult<&IStream, ast::Parlist> {
+    let (i, _) = kwd("...")(i)?;
+    return Ok((
+        i,
+        ast::Parlist {
+            namelist: vec![],
+            has_ellipsis: true
+        }
+    ));
+}
+
+fn parlist(i: &ISlice) -> IResult<&IStream, ast::Parlist> {
+
+    return alt((
+        parlist_wo_namelist,
+        parlist_w_namelist,
+    ))(i);
 }
 
 fn exprlist(i: &IStream) -> IResult<&IStream, ast::Exprlist>{
@@ -224,26 +251,91 @@ fn funcname(i: &IStream) -> IResult<&IStream, ast::Funcname> {
 }
 
 fn var(i: &IStream) -> IResult<&IStream, ast::Var>{
-    return alt((
-        map(
-            pair(prefixexp,
-                surrounded(
-                    kwd("["),
-                    expr,
-                    kwd("]")
-                )),
-            |(p, e)| ast::Var::ArrAccess(p, e),
-        ),
-        map(
-            pair(
-                prefixexp,
-                preceded(kwd("."), name)
-            ),
-            |(p, n)| ast::Var::DotAccess(p, n),
-        ),
-        map(name, |n| ast::Var::N(n)),
-    ))(i);
+
+    // hacky: it's likely that the best thing to do here is 
+    // just accept prefixexprs instead of this failure model
+
+    let (i, expression) = prefixexp(i)?;
+
+    // let's check that this finishes in the right way
+    match expression.suffixes.len() {
+        0 => {
+            match expression.prefix {
+                // if there are no suffixes we're working just on a prefix
+                ast::Prefix::Varname(name) => {
+                    return Ok((
+                        i, ast::Var::N(name)
+                    ))
+                },
+                // if it's a paren, that's not valid and we fail
+                ast::Prefix::ParenedExpr(_) => {
+                    return err(i);
+                }
+            }
+        },
+        _ => {
+            // not empty list, we need to check that the last expression is usable
+
+            let last_suffix = &expression.suffixes[
+                expression.suffixes.len() - 1
+            ];
+
+            let var_prefix = &expression.suffixes[0..expression.suffixes.len() - 1];
+
+            match last_suffix {
+                ast::Suffix::MethodCall(_, _) => {
+                    // not allowd to use a method call as an lvalue
+                    return err(i);
+                },
+                ast::Suffix::DotAccess(name) => {
+                    return Ok((
+                        i,
+                        ast::Var::DotAccess(
+                          ast::Prefixexpr {
+                              prefix: expression.prefix,
+                              suffixes: var_prefix.to_vec(),
+                          },
+                          name.to_string()
+                        )
+                    ))
+                },
+                ast::Suffix::ArrAccess(expr) => {
+                    return Ok((
+                        i,
+                        ast::Var::ArrAccess(
+                            ast::Prefixexpr {
+                                prefix: expression.prefix,
+                                suffixes: var_prefix.to_vec(),
+                            },
+                            // I bet there's a better mechanism there
+                            expr.clone()
+                        )
+                    ))
+                }
+            }
+        }
+    }
 }
+    // return alt((
+    //     map(
+    //         pair(prefixexp,
+    //             surrounded(
+    //                 kwd("["),
+    //                 expr,
+    //                 kwd("]")
+    //             )),
+    //         |(p, e)| ast::Var::ArrAccess(p, e),
+    //     ),
+    //     map(
+    //         pair(
+    //             prefixexp,
+    //             preceded(kwd("."), name)
+    //         ),
+    //         |(p, n)| ast::Var::DotAccess(p, n),
+    //     ),
+    //     map(name, |n| ast::Var::N(n)),
+    // ))(i);
+
 fn varlist(i: &IStream) -> IResult<&IStream, ast::Varlist> {
     return map(
         separated_list(kwd(","), var),
@@ -448,9 +540,9 @@ fn expr_constants(i: &IStream) -> IResult<&IStream, ast::Expr> {
         map(kwd("..."), |_| ast::Expr::Ellipsis),
         map(table_constructor, |t| ast::Expr::Tbl(t)),
         function_def,
-        surrounded(
-            kwd("("), expr, kwd(")")
-        ),
+        // surrounded(
+        //     kwd("("), expr, kwd(")")
+        // ),
     ))(i);
 }
 
@@ -532,6 +624,25 @@ fn expr_consume(i: &IStream) -> IResult<&IStream, ast::Expr> {
     ))(i);
 }
 
+pub fn try_parse(input: &str) -> Option<ast::Block> {
+    /**
+     * Attempt parsing a string, return None if it fails
+     * 
+     * a non-panic version of parse
+     */
+    let (input, tokens) = lex_all(input).unwrap();
+    if input.len() > 0 {
+        // failed lex
+        return None;
+    }
+    let (remaining_tokens, b) = block(&tokens).unwrap();
+    if remaining_tokens.len() > 0 {
+        // failed parse
+        return None;
+    }
+    return return Some(b);
+}
+
 pub fn parse(input: &str) -> ast::Block { 
     let (input, tokens) = lex_all(input).unwrap();
     if input.len() > 0 {
@@ -560,15 +671,102 @@ mod tests {
         ($parser:expr, $input:expr) => {
             let (remaining_input, lexed) = lex_all($input).unwrap();
             if remaining_input.len() != 0 {
-                dbg!(&remaining_input[..10]);
+                dbg!(&remaining_input[..remaining_input.len().min(10)]);
                 panic!("Input remained from lexing")
             }
             let (remaining_tokens, _) = $parser(&lexed).unwrap();
             if remaining_tokens.len() != 0 {
-                dbg!(&remaining_tokens[..10]);
+                dbg!(&remaining_tokens[..remaining_tokens.len().min(10)]);
                 panic!("Input remained from parsing")
             };
         };
+    }
+
+    #[test]
+    fn test_snippets(){
+
+        assert_parse_all!(
+            block,
+            r#"
+local dummy
+local _ENV = (function (...) return ... end)(_G, dummy)   -- {
+
+do local _ENV = {assert=assert}; assert(true) end
+mt = {_G = _G}
+local foo,x
+A = false    -- "declare" A
+do local _ENV = mt
+  function foo (x)
+    A = x
+    do local _ENV =  _G; A = 1000 end
+    return function (x) return A .. x end
+  end
+end
+assert(getenv(foo) == mt)
+x = foo('hi'); assert(mt.A == 'hi' and A == 1000)
+assert(x('*') == mt.A .. '*')
+
+do local _ENV = {assert=assert, A=10};
+  do local _ENV = {assert=assert, A=20};
+    assert(A==20);x=A
+  end
+  assert(A==10 and x==20)
+end
+assert(x==20)
+
+
+print('OK')
+
+return 5,f
+
+            "#
+        );
+
+        assert_parse_all!(
+            expr,
+            "function (x) return A .. x end"
+        );
+
+        assert_parse_all!(
+            prefixexp,
+            "c"
+        );
+
+        assert_parse_all!(
+            expr,
+            "2"
+        );
+
+        assert_parse_all!(
+            var,
+            "c[2]"
+        );
+
+        assert_parse_all!(
+            varlist,
+            "c[2], a[b]"
+        );
+
+        assert_parse_all!(
+            block,
+            "c[2], a[b] = -((a + d/2 - a[b]) ^ a.x), b"
+        );
+
+        assert_parse_all!(
+            block,
+            "
+check(function ()
+  local a,b,c,d
+  a = b*2
+  c[2], a[b] = -((a + d/2 - a[b]) ^ a.x), b
+end,
+  'LOADNIL',
+  'MUL',
+  'DIV', 'ADD', 'GETTABLE', 'SUB', 'GETTABLE', 'POW',
+    'UNM', 'SETTABLE', 'SETTABLE', 'RETURN')
+
+            "
+        );
     }
     #[test]
     fn test_expr_parse(){
@@ -910,14 +1108,68 @@ local x = 3;
         use std::fs;
 
         let file_paths = fs::read_dir("lua_tests/.").unwrap();
+        let mut last_failure: Option<std::path::PathBuf> = None;
+
         for path in file_paths {
             let unwrapped_path = path.unwrap().path();
 
-            print!("{}", unwrapped_path.display());
+            // we don't handle UTF-8 stuff yet
+            // let files_w_non_utf8 = vec![
+                // "files.lua", "pm.lua",
+            // ];
+    
+            // UTF handling
+            let attempted_utf8_check = File::open(unwrapped_path.clone());
 
-            file_contents!(unwrapped_path, contents);
+            let can_read_file = {
+                let mut f = File::open(unwrapped_path.clone()).unwrap();
+                let mut buf = String::new();
+                match f.read_to_string(&mut buf) {
+                    Err(_) => {
+                        false
+                    },
+                    Ok(_) => {
+                        true
+                    }
+                }
+            };
 
-            parse(contents.as_str());
+            if !can_read_file {
+                println!("Skipping {} for non-UTF8", unwrapped_path.display());
+                continue;
+            }
+            // for f in files_w_non_utf8 {
+                // if unwrapped_path.display().to_string().contains(f) {
+                    // continue;
+                // }
+            // }
+
+            println!("Parsing {}...", unwrapped_path.display());
+
+            file_contents!(unwrapped_path.clone(), contents);
+            match try_parse(contents.as_str()){
+                None => {
+                    // failed parse
+                    println!("Failed!");
+                    last_failure = Some(unwrapped_path);
+                },
+                Some(_) => {
+                    // succeeded parse
+                    println!("success");
+                }
+            };
+        }
+        
+        match last_failure {
+            None => {
+                //passed, nothing to do
+            },
+            Some(filepath) => {
+                println!("Re-attempt failed parse of {}", filepath.display());
+                
+                file_contents!(filepath, contents);
+                parse(contents.as_str());
+            }
         }
     }
     #[test]
