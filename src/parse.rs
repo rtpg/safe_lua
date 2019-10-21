@@ -159,17 +159,6 @@ fn funcbody(i: &IStream) -> IResult<&IStream, ast::Funcbody> {
     return Ok((i, ast::Funcbody {parlist: m_parlist, body: b}));
 }
 
-fn funccall(i: &IStream) -> IResult<&IStream, ast::Funccall> {
-    let (i, p) = prefixexp(i)?;
-    let (i, maybe_name) = opt(
-        preceded(kwd(":"), name)
-    )(i)?;
-    let (i, a) = args(i)?;
-    return Ok((i, ast::Funccall {expr: p, 
-                                 command_name: maybe_name,
-                                 args: a}));
-}
-
 pub fn surrounded<T, U, V, I, O, O1, O2>(
     left_parser: T, inner: U, right_parser: V) -> impl Fn(I) -> IResult<I, O>
  where T: Fn(I) -> IResult<I, O1>,
@@ -262,6 +251,17 @@ fn varlist(i: &IStream) -> IResult<&IStream, ast::Varlist> {
     )(i);
 }
 
+fn funcdecl(i: &IStream) -> IResult<&IStream, ast::Stat> {
+
+    return map(
+        preceded(
+            kwd("function"),
+            pair(funcname, funcbody),
+        ),
+        |(n, b)| ast::Stat::FuncDecl(n, b)
+    )(i);
+}
+
 fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
     return alt((
         map(kwd(";"), |_| ast::Stat::Semicol),
@@ -312,6 +312,7 @@ fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
             ),
             |(e, b)| ast::Stat::While(e, b),
         ),
+        funcdecl,
         map(
             tuple((
                 surrounded(kwd("if"), expr, kwd("then")),
@@ -353,13 +354,6 @@ fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
         ),
         map(
             preceded(
-                kwd("function"),
-                pair(funcname, funcbody),
-            ),
-            |(n, b)| ast::Stat::FuncDecl(n, b)
-        ),
-        map(
-            preceded(
                 pair(kwd("local"), kwd("function")),
                 pair(name, funcbody),
             ),
@@ -376,9 +370,7 @@ fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
         )
     ))(i);
 }
-// fn funccall(i: &IStream) -> IResult<&IStream, ast::Funccall> {
 
-// }
 fn retstat(i: &IStream) -> IResult<&IStream, ast::Retstat>{
     let (i, m_elist) = surrounded(
         kwd("return"),
@@ -537,7 +529,6 @@ fn expr_consume(i: &IStream) -> IResult<&IStream, ast::Expr> {
     return alt((
         expr_constants,
         map(prefixexp, |p| ast::Expr::Pref(Box::new(p))),
-        // TOOD UnOp
     ))(i);
 }
 
@@ -549,7 +540,7 @@ pub fn parse(input: &str) -> ast::Block {
     }
     let (remaining_tokens, b) = block(&tokens).unwrap();
     if remaining_tokens.len() > 0 {
-        for t in &remaining_tokens[..10]{
+        for t in &remaining_tokens[..30]{
             dbg!(t);
         }
         panic!("Remaining tokens");
@@ -581,10 +572,197 @@ mod tests {
     }
     #[test]
     fn test_expr_parse(){
-        let input = r#"
-f(x, 3 + 5, y[z].foo.bar)
-        "#;
 
+        assert_parse_all!(
+            block,
+            "for i = 1, #arg do res = res & arg[i] end"
+        );
+
+        assert_parse_all!(
+            funcname,
+            "foo.bar"
+        );
+
+        assert_parse_all!(
+            parlist,
+            "..."
+        );
+
+        assert_parse_all!(
+            funcbody,
+            "(a) return a end"
+        );
+
+        assert_parse_all!(
+            expr,
+            "{...}"
+        );
+
+        assert_parse_all!(
+            parlist,
+            "x, y, z, ..."
+        );
+
+        assert_parse_all!(
+            block,
+            "local arg = {...}
+             local res = x & y & z"
+        );
+
+        assert_parse_all!(
+            block,
+            "
+              if not z then
+    return ((x or -1) & (y or -1)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x & y & z
+    for i = 1, #arg do res = res & arg[i] end
+    return res & 0xFFFFFFFF
+  end"
+        );
+
+        assert_parse_all!(
+            funcdecl,
+            "function foo.bar (x) return 3 end"
+        );
+
+        assert_parse_all!(
+            block,
+            "return bit.band(...) ~= 0"
+        );
+
+        assert_parse_all!(
+            funcdecl,
+            "
+function bit.btest (...)
+  return bit.bnd(...) ~= 0
+end
+            "
+        );
+
+        assert_parse_all!(
+            block,
+            r#"
+            
+-- no built-in 'bit32' library: implement it using bitwise operators
+
+local bit = {}
+
+function bit.bnot (a)
+  return ~a & 0xFFFFFFFF
+end
+
+
+--
+-- in all vararg functions, avoid creating 'arg' table when there are
+-- only 2 (or less) parameters, as 2 parameters is the common case
+--
+
+function bit.band (x, y, z, ...)
+  if not z then
+    return ((x or -1) & (y or -1)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x & y & z
+    for i = 1, #arg do res = res & arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.bor (x, y, z, ...)
+  if not z then
+    return ((x or 0) | (y or 0)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x | y | z
+    for i = 1, #arg do res = res | arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.bxor (x, y, z, ...)
+  if not z then
+    return ((x or 0) ~ (y or 0)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x ~ y ~ z
+    for i = 1, #arg do res = res ~ arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.btest (...)
+  return bit.band(...) ~= 0
+end
+
+function bit.lshift (a, b)
+  return ((a & 0xFFFFFFFF) << b) & 0xFFFFFFFF
+end
+
+function bit.rshift (a, b)
+  return ((a & 0xFFFFFFFF) >> b) & 0xFFFFFFFF
+end
+
+function bit.arshift (a, b)
+  a = a & 0xFFFFFFFF
+  if b <= 0 or (a & 0x80000000) == 0 then
+    return (a >> b) & 0xFFFFFFFF
+  else
+    return ((a >> b) | ~(0xFFFFFFFF >> b)) & 0xFFFFFFFF
+  end
+end
+
+function bit.lrotate (a ,b)
+  b = b & 31
+  a = a & 0xFFFFFFFF
+  a = (a << b) | (a >> (32 - b))
+  return a & 0xFFFFFFFF
+end
+
+function bit.rrotate (a, b)
+  return bit.lrotate(a, -b)
+end
+
+local function checkfield (f, w)
+  w = w or 1
+  assert(f >= 0, "field cannot be negative")
+  assert(w > 0, "width must be positive")
+  assert(f + w <= 32, "trying to access non-existent bits")
+  return f, ~(-1 << w)
+end
+
+function bit.extract (a, f, w)
+  local f, mask = checkfield(f, w)
+  return (a >> f) & mask
+end
+
+function bit.replace (a, v, f, w)
+  local f, mask = checkfield(f, w)
+  v = v & mask
+  a = (a & ~(mask << f)) | (v << f)
+  return a & 0xFFFFFFFF
+end
+
+return bit
+            "#
+        );
+
+        assert_parse_all!(
+            block,
+            r#"
+function bit.band (x, y, z, ...)
+  if not z then
+    return ((x or -1) & (y or -1)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x & y & z
+    for i = 1, #arg do res = res & arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+            "#
+        );
         assert_parse_all!(
             expr,
             r#"
@@ -727,6 +905,21 @@ local x = 3;
         parse(contents.as_str());
     }
 
+    #[test]
+    fn test_parsing_of_all_test_files(){
+        use std::fs;
+
+        let file_paths = fs::read_dir("lua_tests/.").unwrap();
+        for path in file_paths {
+            let unwrapped_path = path.unwrap().path();
+
+            print!("{}", unwrapped_path.display());
+
+            file_contents!(unwrapped_path, contents);
+
+            parse(contents.as_str());
+        }
+    }
     #[test]
     fn test_parse(){
         let l: Vec<lex::Lex> = lex_all("nil").unwrap().1;

@@ -14,8 +14,6 @@ mod parse;
 mod lex;
 mod compile;
 
-use std::collections::HashSet;
-
 fn main(){
     println!("Starting lex");
     println!("Starting parse");
