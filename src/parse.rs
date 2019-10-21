@@ -540,9 +540,6 @@ fn expr_constants(i: &IStream) -> IResult<&IStream, ast::Expr> {
         map(kwd("..."), |_| ast::Expr::Ellipsis),
         map(table_constructor, |t| ast::Expr::Tbl(t)),
         function_def,
-        // surrounded(
-        //     kwd("("), expr, kwd(")")
-        // ),
     ))(i);
 }
 
@@ -1109,6 +1106,8 @@ local x = 3;
 
         let file_paths = fs::read_dir("lua_tests/.").unwrap();
         let mut last_failure: Option<std::path::PathBuf> = None;
+        let mut test_count = 0;
+        let mut failure_count = 0;
 
         for path in file_paths {
             let unwrapped_path = path.unwrap().path();
@@ -1134,10 +1133,13 @@ local x = 3;
                 }
             };
 
+            test_count += 1;
             if !can_read_file {
                 println!("Skipping {} for non-UTF8", unwrapped_path.display());
+                failure_count += 1;
                 continue;
             }
+            
             // for f in files_w_non_utf8 {
                 // if unwrapped_path.display().to_string().contains(f) {
                     // continue;
@@ -1151,6 +1153,7 @@ local x = 3;
                 None => {
                     // failed parse
                     println!("Failed!");
+                    failure_count += 1;
                     last_failure = Some(unwrapped_path);
                 },
                 Some(_) => {
@@ -1165,6 +1168,7 @@ local x = 3;
                 //passed, nothing to do
             },
             Some(filepath) => {
+                println!("Parsed {} files, with {} failures", test_count, failure_count);
                 println!("Re-attempt failed parse of {}", filepath.display());
                 
                 file_contents!(filepath, contents);
