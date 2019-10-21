@@ -2,6 +2,18 @@ extern crate nom;
 extern crate nom_recursive;
 extern crate nom_packrat;
 
+pub mod utils;
+mod func;
+mod expr;
+
+use parse::expr::expr;
+
+use parse::utils::surrounded;
+use parse::func::{
+    funcname,
+    funcbody
+};
+
 use lex::{
     ISlice,
     lex_all
@@ -177,25 +189,6 @@ fn args(i: &IStream) -> IResult<&IStream, ast::Args> {
     ))(i);
 }
 
-fn funcbody(i: &IStream) -> IResult<&IStream, ast::Funcbody> {
-    let (i, m_parlist) = surrounded(
-        kwd("("),
-        opt(parlist),
-        kwd(")"))(i)?;
-    let (i, (b, _)) = pair(block, kwd("end"))(i)?;
-    return Ok((i, ast::Funcbody {parlist: m_parlist, body: b}));
-}
-
-pub fn surrounded<T, U, V, I, O, O1, O2>(
-    left_parser: T, inner: U, right_parser: V) -> impl Fn(I) -> IResult<I, O>
- where T: Fn(I) -> IResult<I, O1>,
-       U: Fn(I) -> IResult<I, O>,
-       V: Fn(I) -> IResult<I, O2> {
-    return preceded(
-        left_parser, terminated(inner, right_parser)
-    );
-}
-
 fn prefix(i: &IStream) -> IResult<&IStream, ast::Prefix> {
     return alt((
         map(surrounded(kwd("("), expr, kwd(")"),),
@@ -237,17 +230,6 @@ fn prefixexp(i: &IStream) -> IResult<&IStream, ast::Prefixexpr> {
 
 fn namelist(i: &IStream) -> IResult<&IStream, ast::Namelist> {
     return separated_list(kwd(","), name)(i);
-}
-
-fn funcname(i: &IStream) -> IResult<&IStream, ast::Funcname> {
-    let (i, f_n) = name(i)?;
-    let (i, o_n_c) = many0(preceded(kwd("."), name))(i)?;
-    let (i, m_m_c) = opt(preceded(kwd(":"), name))(i)?;
-    return Ok((i, ast::Funcname {
-        first_name_component: f_n,
-        other_name_components: o_n_c,
-        method_component: m_m_c,
-    }));
 }
 
 fn var(i: &IStream) -> IResult<&IStream, ast::Var>{
@@ -529,19 +511,6 @@ fn table_constructor(i: &IStream) -> IResult<&IStream, ast::Tableconstructor> {
     );
 }
 
-fn expr_constants(i: &IStream) -> IResult<&IStream, ast::Expr> {
-    // return expr constants or parenthesized
-    return alt((
-        map(kwd("nil"), |_| ast::Expr::Nil),
-        map(kwd("true"), |_| ast::Expr::True),
-        map(kwd("false"), |_| ast::Expr::False),
-        num_parser,
-        map(literal_string_parser, |s| ast::Expr::LiteralString(s)),
-        map(kwd("..."), |_| ast::Expr::Ellipsis),
-        map(table_constructor, |t| ast::Expr::Tbl(t)),
-        function_def,
-    ))(i);
-}
 
 fn unary_op(i: &IStream) -> IResult<&IStream, String>{
     let (i, result) = alt((
@@ -561,45 +530,6 @@ fn unary_op(i: &IStream) -> IResult<&IStream, String>{
     }
 }
 
-fn expr(i: &IStream) -> IResult<&IStream, ast::Expr>{
-    // parse out any unary operators and then read inner expressions;
-
-    let (i, mut unops) = many0(unary_op)(i)?;
-    let (i, inner_expr) = expr2(i)?;
-
-    let mut return_result = inner_expr;
-    unops.reverse();
-    for unop in unops {
-        return_result = ast::Expr::UnOp(
-            unop,
-            Box::new(return_result)
-        );
-    }
-
-    return Ok((i, return_result));
-}
-
-fn expr2(i: &IStream) -> IResult<&IStream, ast::Expr> {
-    // basically, parse binary opereators since they're 
-    // left recursive
-    let (i, first_expr) = expr_consume(i)?;
-    let (i, bin_op_list) = many0(binop_right)(i)?;
-    if bin_op_list.len() == 0 {
-        // no binary operations, return the expression
-        return Ok((i, first_expr));
-    } else {
-        // we need to fold the binary operator
-        let mut result_expression = first_expr;
-        for (operator, right_exp) in bin_op_list {
-            result_expression = ast::Expr::BinOp(
-                Box::new(result_expression),
-                operator,
-                Box::new(right_exp),
-            )
-        }
-        return Ok((i, result_expression));
-    }
-}
 
 fn binop_right(i: &IStream) -> IResult<&IStream, (ast::BinaryOperator, ast::Expr)> {
     let (i, operator) = alt((
@@ -612,13 +542,6 @@ fn binop_right(i: &IStream) -> IResult<&IStream, (ast::BinaryOperator, ast::Expr
     let (i, right_expr) = expr(i)?;
     return Ok((i,
     (operator, right_expr)));
-}
-
-fn expr_consume(i: &IStream) -> IResult<&IStream, ast::Expr> {
-    return alt((
-        expr_constants,
-        map(prefixexp, |p| ast::Expr::Pref(Box::new(p))),
-    ))(i);
 }
 
 pub fn try_parse(input: &str) -> Option<ast::Block> {

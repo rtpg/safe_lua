@@ -46,7 +46,8 @@ pub fn short_string(input: &str) -> IResult<&str, Lex>{
 
 
 pub fn long_string(input: &str) -> IResult<&str, Lex> {
-    use super::super::parse::surrounded;
+    use parse::utils::surrounded;
+
     // first let's find the opening brackets
     let (input, equals_level) = surrounded(
         tag("["),
