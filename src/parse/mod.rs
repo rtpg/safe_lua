@@ -69,11 +69,18 @@ fn num_component(i: char) -> bool {
     return i.is_numeric();
 }
 
-fn err<T>(i: &IStream) -> IResult<&IStream, T> {
+pub fn err<T>(i: &IStream) -> IResult<&IStream, T> {
     return Err(
         Err::Error((i, ErrorKind::Alpha))
     );
 }
+
+pub fn err_str<T>(i: &str) -> IResult<&str, T> {
+    return Err(
+        Err::Error((i, ErrorKind::Alpha))
+    );
+}
+
 
 fn num_parser(i: &IStream) -> IResult<&ISlice, ast::Expr> {
     match i.get(0) {

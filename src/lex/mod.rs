@@ -3,7 +3,7 @@
 #[allow(unused_imports)]
 use nom::character::complete::none_of;
 use nom::sequence::preceded;
-use nom::combinator::map;
+use nom::combinator::{map, opt};
 use nom::multi::{many0, many1};
 use nom::character::complete::{
     char as char_parse,
@@ -143,7 +143,20 @@ pub fn parse_comment(input: &str) -> IResult<&str, &str> {
             if split_text.len() == 1 {
                 return Ok(("", input));
             } else{
-                return Ok((split_text[1], split_text[0]));
+                // we now have the start of a thing, try to parse a long block
+                let comment = split_text[0];
+                // try to parse a long block out
+                let i = &input[2..];
+                let (i, maybe_long_block) = opt(strings::long_string)(i)?;
+                match maybe_long_block {
+                    None => {
+                        // no long block, keep the short block result
+                        return Ok((split_text[1], ""));
+                    },
+                    Some(long_block) => {
+                        return Ok((i, ""));
+                    }
+                }
             }
         },
         _ => {
@@ -193,6 +206,9 @@ pub fn lex_all_aux(i: &str) -> IResult<&str, Vec<Lex>> {
 
     // return many1(parse_name)(i);
     let ignored_content = alt((parse_whitespace, parse_comment));
+    // if there's a shebang line, ignore it by parsing it out
+    let (i, _) = opt(preceded(tag("#"), many0(none_of("\n"))))(i)?;
+
     return many1(alt((
         map(ignored_content, |_| return Lex::Ignore),
         strings::parse_string,

@@ -11,16 +11,34 @@ use nom::bytes::complete::tag;
 use nom::branch::alt;
 use nom::combinator::{ opt, map };
 use super::Lex;
+use super::super::parse::err_str;
 
 fn hex_parse(i: &str) -> IResult<&str, String> {
     let (i, hex_prefix) = alt((tag("0x"), tag("0X")))(i)?;
-    let (i, hex_digits) = hex_digit1(i)?;
+    let (i, maybe_hex_digits) = opt(hex_digit1)(i)?;
     let (i, maybe_fraction) = opt(
         preceded(
             tag("."),
-            hex_digit1,
+            opt(hex_digit1),
         )
     )(i)?;
+    if maybe_hex_digits.is_none() {
+        match maybe_fraction {
+            None => {
+                return err_str(i);
+            },
+            Some(None) => {
+                return err_str(i);
+            },
+            Some(Some(_)) => { }
+        }
+    }
+
+    let hex_digits = match maybe_hex_digits {
+        None => "0",
+        Some(n) => n
+    };
+
     let (i, maybe_exponent) = opt(
         pair(
             alt((tag("p"), tag("P"))),
@@ -35,7 +53,8 @@ fn hex_parse(i: &str) -> IResult<&str, String> {
 
     match maybe_fraction {
         None => {},
-        Some(fractions) => {
+        Some(None) => {},
+        Some(Some(fractions)) => {
            result += ".";
            result += fractions;
         }
@@ -71,13 +90,37 @@ pub fn parse_number(i: &str) -> IResult<&str, Lex>{
 }
 
 fn parse_nonhex_number(input: &str) -> IResult<&str, Lex> {
-    let (i, whole_part) = digit1(input)?;
+    let (i, maybe_whole_part) = opt(digit1)(input)?;
     let (i, maybe_fraction) = opt(
         preceded(
             tag("."),
-            digit1
+            opt(digit1)
         )
     )(i)?;
+    
+    // need either a digit or a . in front
+    // if a . is in front we'll make the number zero
+    // if we have a dot, we need either a whole part or something in the fraction, but not neither
+    if maybe_whole_part.is_none() {
+        match maybe_fraction {
+            None => {
+                // no input (no beginning of number)
+                return err_str(i);
+            },
+            Some(None) => {
+                // just .
+                return err_str(i);
+            },
+            Some(Some(_)) => {
+                // .n (valid)
+            }
+        }
+    }
+    // here either we have a dot or a whole part first
+    let whole_part = match maybe_whole_part {
+        Some(n) => n,
+        None => "0",
+    };
 
     let (i, maybe_exponent) = opt(
         pair(
@@ -93,7 +136,8 @@ fn parse_nonhex_number(input: &str) -> IResult<&str, Lex> {
 
     match maybe_fraction {
         None => {},
-        Some(fraction) => {
+        Some(None) => {}
+        Some(Some(fraction)) => {
             result += ".";
             result += fraction;
         }
