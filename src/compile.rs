@@ -25,7 +25,12 @@ pub enum BC {
     PUSH_NAMELIST(ast::Namelist, bool),
     PUSH_NEW_TBL,
 
+    // this looks up a name in the env, and then puts it on the stack
     PUSH_VAL_BY_NAME(String),
+
+    // with the stack being [value][name], set a local
+    SET_LOCAL,
+
     ARRAY_ACCESS,
     DOT_ACCESS,
 
@@ -65,7 +70,7 @@ pub enum BC {
 #[derive(Debug)]
 pub struct CodeObj {
     // the actual commands to run when we want to run this code block
-    bytecode: Vec<BC>,
+    pub bytecode: Vec<BC>,
     // references to other code blocks
     // (for example code blocks for funciton definitions)
     inner_code: Vec<CodeObj>,
@@ -180,7 +185,12 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
             // after jump location...
             code.emit_fwd_jump_location(jump_to_end);
         },
+        LocalNames(namelist, maybe_exprlist) => {
+            //http://www.lua.org/manual/5.3/manual.html#3.3.3
+            panic!("Local names not implemented yet")
+        },
         _ => {
+            dbg!(stat);
             panic!("Not implemented yet");
         }
     }
@@ -339,7 +349,28 @@ pub fn push_prefixexpr(pexpr: ast::Prefixexpr, code: &mut impl Code){
                 code.emit(BC::DOT_ACCESS);
             },
             MethodCall(_name, _args) => {
-                panic!("Not implemented method calls yet")
+                // a(:name)(args)
+                // a is already on the stack
+                let is_method_call = _name.is_some();
+
+                match &_name {
+                    Some(n) => {
+                        code.emit(BC::PUSH_STRING(n.to_string()))
+                    },
+                    None => {}
+                }
+
+                // also push the arguments on the stack
+                push_args(_args, code);
+
+                match _name {
+                    Some(_n) => {
+                        code.emit(BC::CALL_METHOD)
+                    },
+                    None => {
+                        code.emit(BC::CALL_FUNCTION)
+                    }
+                }
             }
         }
     }

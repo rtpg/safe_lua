@@ -570,7 +570,7 @@ pub fn try_parse(input: &str) -> Option<ast::Block> {
     return return Some(b);
 }
 
-pub fn parse(input: &str) -> ast::Block { 
+pub fn parse(input: &str) -> ast::Block {
     let (input, tokens) = lex_all(input).unwrap();
     if input.len() > 0 {
         dbg!(&input[..20]);

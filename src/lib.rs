@@ -5,16 +5,16 @@ extern crate nom;
 extern crate lazy_static;
 
 #[allow(dead_code)]
-mod eval;
+pub mod eval;
 #[allow(dead_code)]
-mod ast;
+pub mod ast;
 #[allow(dead_code)]
-mod parse;
+pub mod parse;
 #[allow(dead_code)]
-mod lex;
-mod compile;
-mod utils;
-fn main(){
+pub mod lex;
+pub mod compile;
+pub mod utils;
+pub fn main(){
     println!("Starting lex");
     println!("Starting parse");
 }
