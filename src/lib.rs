@@ -13,7 +13,7 @@ mod parse;
 #[allow(dead_code)]
 mod lex;
 mod compile;
-
+mod utils;
 fn main(){
     println!("Starting lex");
     println!("Starting parse");

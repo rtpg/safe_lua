@@ -10,7 +10,7 @@ mod lex;
 mod compile;
 use std::fs::File;
 use std::io::Read;
-
+mod utils;
 
 #[allow(unused_variables)]
 fn main(){

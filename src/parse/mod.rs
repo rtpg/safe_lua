@@ -551,12 +551,12 @@ fn binop_right(i: &IStream) -> IResult<&IStream, (ast::BinaryOperator, ast::Expr
     (operator, right_expr)));
 }
 
+/**
+ * Attempt parsing a string, return None if it fails
+ *
+ * a non-panic version of parse
+ */
 pub fn try_parse(input: &str) -> Option<ast::Block> {
-    /**
-     * Attempt parsing a string, return None if it fails
-     * 
-     * a non-panic version of parse
-     */
     let (input, tokens) = lex_all(input).unwrap();
     if input.len() > 0 {
         // failed lex
@@ -590,6 +590,8 @@ pub fn parse(input: &str) -> ast::Block {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
+
+    use ::file_contents;
 
     use std::fs::File;
     use std::io::Read;
@@ -1012,15 +1014,6 @@ local x = 3;
         );
     }
 
-    macro_rules! file_contents {
-        ($filename:expr, $into_var:ident) => {
-            let mut $into_var = String::new();
-            {
-                let mut file = File::open($filename).unwrap();
-                file.read_to_string(&mut $into_var).unwrap();
-            }
-        };
-    }
 
     #[test]
     fn test_parsing_of_lua_files(){
