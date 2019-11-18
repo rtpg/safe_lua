@@ -1,0 +1,27 @@
+Currently, I need to implement support for unary operators
+
+
+Also I should get some positioning information in the lexing tokens
+
+
+Parsing of numbers is incomplete
+
+I probably need to remove lib.rs
+
+last time I was in the whole "get everything to parse" area
+
+I got everything to parse, next step is to try and eval stuff
+
+To do that I gotta:
+  - fill in eval.rs' function to eval a file
+  - figure out implementation of "native functions"
+  - implement assert and error stuff
+
+
+ Right now should just be able to run the tests to find the next steps to run
+
+ I really should encode the position of tokens into the tokens
+
+ I also should start looking into ways for the system to report its state.
+
+ Instead of a test, hould make the main program be able to just run a thing.
