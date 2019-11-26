@@ -6,9 +6,11 @@
 use ast;
 use lex;
 use std::collections::HashMap;
+use ast::Name;
 
 // jump target shape
 #[derive(Clone, Debug)]
+#[must_use="Consume any jump targets"]
 pub enum JumpTarget {
     CodeLoc(usize),
     JumpTable(usize),
@@ -58,11 +60,41 @@ pub enum BC {
     BUILD_LIST(usize),
     BUILD_FUNCTION,
 
+    // extract from exprlist puts a value from an exprlist
+    // onto the top of the stack
+    EXTRACT_FROM_EXPRLIST(usize),
+    // assign something to a local
+    // takes the top of the stack's array value
+    // and puts it in the local env under name
+    ASSIGN_LOCAL_FROM_EXPRLIST(Name, usize),
+    // give a local value nil
+    ASSIGN_LOCAL_NIL(Name),
+    ASSIGN_LOCAL_FROM_TOP_OF_STACK(Name),
     // jump commands
     JUMP(JumpTarget),
     // pop the stack and jump if the value is truthy
     JUMP_TRUE(JumpTarget),
     JUMP_FALSE(JumpTarget),
+
+    // for loop instructions
+    // this is to simplify some easy operations
+    // INIT: decremenent start value by the step
+    FOR_LOOP_INIT,
+    // CHECK_CONDITION:
+    // do increment as needed
+    // push a boolean to jump if needed
+    // also edit the local with the current value
+    FOR_LOOP_CHECK_CONDITION(Name),
+
+    // for in loop instructions
+    // this also simplifies stuff
+    // INIT: set up init conditions
+    FOR_IN_LOOP_INIT,
+
+    // BREAK: find the latest for loop and break out into it
+    BREAK,
+    // PANIC: just blow up
+    PANIC(String),
 }
 
 // code objects
@@ -187,34 +219,168 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
         },
         LocalNames(namelist, maybe_exprlist) => {
             //http://www.lua.org/manual/5.3/manual.html#3.3.3
-            panic!("Local names not implemented yet")
+            // TODO last element of a function getting expanded
+            match maybe_exprlist {
+                Some(exprlist) => {
+                    // first we push the expression list
+                    push_exprlist(exprlist, code);
+                    // then we will create assignment instructions for
+                    // all the names
+                    let namelist_size = namelist.len();
+                    for i in 0..namelist_size{
+                        // create assignment
+                        code.emit(
+                            BC::ASSIGN_LOCAL_FROM_EXPRLIST(
+                                namelist[i].clone(),
+                                i,
+                            )
+                        )
+                    }
+                },
+                None => {
+                    // let's just make everything nil
+                    for name in namelist {
+                        code.emit(
+                            BC::ASSIGN_LOCAL_NIL(name)
+                        )
+                    }
+                }
+            }
         },
         LocalFuncDecl(name, funcbody) => {
-            panic!("Local func decl not implemented yet")
+            push_func(funcbody, code);
+            code.emit(
+                BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(name)
+            );
         },
         Eql(varlist, exprlist) => {
-            panic!("Equals statement not implemented yet")
+            // TODO right-most function expansion
+            push_exprlist(exprlist, code);
+            // once we have the exprlist on the top of the stack
+            // we'll try to assign to each variable
+            let varlist_len = varlist.vars.len();
+            for i in 0..varlist_len {
+                // first we extract out the value to assign...
+                code.emit(BC::EXTRACT_FROM_EXPRLIST(i));
+                // then we do the assignment
+                push_var_assignment(&varlist.vars[i], code);
+            }
         },
         If {predicate, then_block, elif_list, else_block} => {
-            panic!("If not implemented yet")
+            // in an if statement, we need to evaluate the predicate
+            // then jump to the right places
+            // first, let's evaluate the predicate
+            push_expr(predicate, code);
+            let after_then_block = code.prep_fwd_jump();
+            // this second statement is used to jump over elifs and else
+            // blocks
+            let very_end_of_if_statement = code.prep_fwd_jump();
+            // if the predicate is _false_ we go after the then block
+            code.emit(BC::JUMP_FALSE(after_then_block.clone()));
+            // now let's emit the then block;
+            compile_block(then_block, code);
+            // and then jump to the end
+            code.emit(BC::JUMP(very_end_of_if_statement.clone()));
+            code.emit_fwd_jump_location(after_then_block);
+            //next up we see if there's any elif to deal with
+            for (pred, block) in elif_list {
+                // elifs work basically the same way
+                push_expr(pred, code);
+                let after_block = code.prep_fwd_jump();
+                code.emit(BC::JUMP_FALSE(after_block.clone()));
+                compile_block(block, code);
+                code.emit(BC::JUMP(very_end_of_if_statement.clone()));
+                code.emit_fwd_jump_location(after_block);
+            }
+            // finally we have the else block
+            match else_block {
+                Some(else_bl) => {
+                    // if there's an else block and we get here, then
+                    // we didn't execute any other block, so no condition
+                    // to check here
+                    // just execute
+                    compile_block(else_bl, code);
+                },
+                None => {}
+            }
+            code.emit_fwd_jump_location(very_end_of_if_statement);
         },
         Repeat(block, expr) => {
-            panic!("Repeat not implemented yet")
+            // repeat block until expr
+            let start_of_repeat = code.emit_jump_location();
+            compile_block(block, code);
+            // let's check the expression now
+            push_expr(expr, code);
+            // then jump back to the top if needed
+            code.emit(
+                BC::JUMP_FALSE(start_of_repeat)
+            );
         },
         FuncDecl(funcname, funcbody) => {
-            panic!("Func decls not implemented yet")
+            if(funcname.other_name_components.len() > 0 ){
+                panic!("other name components not yet done");
+            }
+            if(funcname.method_component.is_some()){
+                panic!("Method comp not yet done");
+            }
+            push_func(funcbody, code);
+            code.emit(
+                BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(funcname.first_name_component)
+            );
         },
-        For(name, expr_1, expr_2, maybe_expr_3, block) => {
-            panic!("For loops not implemented yet")
+        For(name, start_value, limit, maybe_step, block) => {
+            push_expr(start_value, code);
+            push_expr(limit, code);
+            match maybe_step {
+                Some(step) => {
+                    push_expr(step, code);
+                },
+                None => {
+                    // default step of 1
+                    code.emit(BC::PUSH_NUMBER(1));
+                }
+            }
+            // here we use specialized op codes for for loops
+            // first command is used to decrement start value for the loop
+            code.emit(BC::FOR_LOOP_INIT);
+            let for_loop_block_start = code.emit_jump_location();
+            let for_loop_end = code.prep_fwd_jump();
+            code.emit(BC::FOR_LOOP_CHECK_CONDITION(name));
+            // if the condition is not valid we jump out
+            code.emit(BC::JUMP_FALSE(for_loop_end.clone()));
+            // here we actually run the loop
+            compile_block(block, code);
+            // then we jump back up
+            code.emit(BC::JUMP(for_loop_block_start));
+            // END
+            code.emit_fwd_jump_location(for_loop_end);
         },
         ForIn(namelist, exprlist, block) => {
-            panic!("For-in loops not implemeneted yet")
+            // for x,y,z,a in explist do block end
+            // here the way this works is by evaluating explist
+            // and then getting some data to be used as an iterator
+            push_exprlist(exprlist, code);
+
+            // so now we have the expression list, we then move to
+            // starting up our for in loop
+            code.emit(BC::FOR_IN_LOOP_INIT);
+            // we then begin the actual loop
+//            let for_loop_begin = code.emit_jump_location();
+//            let end_of_for_loop
+            code.emit(BC::PANIC("For-in loops are not implemented yet".to_string()));
+        },
+        Break => {
+            code.emit(BC::BREAK);
         },
         _ => {
             dbg!(stat);
             panic!("Not implemented yet");
         }
     }
+}
+
+pub fn push_var_assignment(var: &ast::Var, code: &mut impl Code){
+//    panic!("Implement var assignment, should be easy");
 }
 
 pub fn push_expr(expr: ast::Expr, code: &mut impl Code){
@@ -425,6 +591,18 @@ pub fn push_variable(v: ast::Var, code: &mut impl Code){
         }
     }
 }
+
+pub fn push_exprlist(exprs: Vec<ast::Expr>, code: &mut impl Code){
+    // take a list of expressions, and build the list from the values
+    // being in the stack
+    // [] -> [list_of_expressions]
+    let expr_count = exprs.len();
+    for expr in exprs {
+        push_expr(expr, code);
+    }
+    code.emit(BC::BUILD_LIST(expr_count));
+}
+
 
 pub fn push_args(args: ast::Args, code: &mut impl Code){
     // build up the argument list for passing to a function
