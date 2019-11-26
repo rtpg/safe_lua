@@ -189,6 +189,27 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
             //http://www.lua.org/manual/5.3/manual.html#3.3.3
             panic!("Local names not implemented yet")
         },
+        LocalFuncDecl(name, funcbody) => {
+            panic!("Local func decl not implemented yet")
+        },
+        Eql(varlist, exprlist) => {
+            panic!("Equals statement not implemented yet")
+        },
+        If {predicate, then_block, elif_list, else_block} => {
+            panic!("If not implemented yet")
+        },
+        Repeat(block, expr) => {
+            panic!("Repeat not implemented yet")
+        },
+        FuncDecl(funcname, funcbody) => {
+            panic!("Func decls not implemented yet")
+        },
+        For(name, expr_1, expr_2, maybe_expr_3, block) => {
+            panic!("For loops not implemented yet")
+        },
+        ForIn(namelist, exprlist, block) => {
+            panic!("For-in loops not implemeneted yet")
+        },
         _ => {
             dbg!(stat);
             panic!("Not implemented yet");
