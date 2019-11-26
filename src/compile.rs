@@ -380,6 +380,7 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
 }
 
 pub fn push_var_assignment(var: &ast::Var, code: &mut impl Code){
+    code.emit(BC::PANIC("Var assignment not implemented yet".to_string()))
 //    panic!("Implement var assignment, should be easy");
 }
 
