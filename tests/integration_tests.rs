@@ -12,7 +12,7 @@ use safe_lua::{
 
 #[test]
 fn test_lua_tests(){
-    let file_name = "/Users/rtpg/proj/safe_lua/lua_tests/constructs.lua";
+    let file_name = "lua_tests/constructs.lua";
     let mut run_state = load_file(&file_name);
 
     loop {

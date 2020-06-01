@@ -317,10 +317,10 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
             );
         },
         FuncDecl(funcname, funcbody) => {
-            if(funcname.other_name_components.len() > 0 ){
+            if funcname.other_name_components.len() > 0 {
                 panic!("other name components not yet done");
             }
-            if(funcname.method_component.is_some()){
+            if funcname.method_component.is_some(){
                 panic!("Method comp not yet done");
             }
             push_func(funcbody, code);

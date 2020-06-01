@@ -567,7 +567,7 @@ pub fn try_parse(input: &str) -> Option<ast::Block> {
         // failed parse
         return None;
     }
-    return return Some(b);
+    return Some(b);
 }
 
 pub fn parse(input: &str) -> ast::Block {

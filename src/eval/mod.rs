@@ -3,6 +3,7 @@
 pub mod exec;
 use ::file_contents;
 use std::io::Read;
+use std::collections::HashMap;
 use ast::Block;
 use parse::parse;
 use super::compile::{
@@ -13,22 +14,31 @@ use std::fs::File;
 use lex;
 use std::rc::Rc;
 
-#[derive(Debug)]
+// our Lua values
+#[derive(Debug, Clone)]
 pub enum LV {
     Num(f64),
+    LuaS(String),
+    LuaList(Vec<LV>),
+    NativeFunc(fn(Option<LV>) -> LV)
 }
 
 pub struct LuaValueStack {
     values: Vec<LV>,
 }
 
+pub struct LuaEnv{
+    values: HashMap<String, LV>
+}
+
 pub struct LuaFrame{
     // This is a single frame, that includes the environment etc
     // calling into another function will build a frame that will
     // execute whatever needs to be executed
-    code: Rc<CodeObj>,
+    code: Rc<CodeObj>, // the code itself
     pc: usize, // program counter
     stack: LuaValueStack, // value stack
+    env: LuaEnv 
 }
 
 #[allow(dead_code)]
@@ -59,6 +69,10 @@ pub fn run_to_checkpoint(state: LuaRunState) -> RunResult {
     return RunResult::Error(String::from("Yikes"));
 }
 
+pub fn lua_print(args: Option<LV>) -> LV {
+    println!("CALLED LUA PRINT");
+    return LV::Num(0.0);
+}
 
 pub fn frame_from_code(code:Rc<CodeObj>) -> LuaFrame {
     return LuaFrame {
@@ -66,7 +80,10 @@ pub fn frame_from_code(code:Rc<CodeObj>) -> LuaFrame {
         pc: 0,
         stack: LuaValueStack {
             values: vec![]
-        }
+        },
+	env: LuaEnv {
+	    values: [("print".to_string(), LV::NativeFunc(lua_print))].iter().cloned().collect()
+	}
     }
 }
 pub fn initial_run_state<'a>(lua_file_path: &'a str) -> LuaRunState {
