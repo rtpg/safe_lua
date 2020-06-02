@@ -1,14 +1,16 @@
 extern crate safe_lua;
-use std::fs::File;
-use std::io::Read;
 
 use safe_lua::{
-    file_contents,
     eval::{
-        load_file,
+	LuaRunState,
+	initial_run_state,
         exec
     }
 };
+
+pub fn load_file(file_path: &str) -> LuaRunState {
+    return initial_run_state(file_path);
+}
 
 #[test]
 fn test_lua_tests(){

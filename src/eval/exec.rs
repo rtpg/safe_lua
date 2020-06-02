@@ -7,8 +7,24 @@ pub enum ExecResult {
     Yield(String),
 }
 
-pub fn exec_to_next_yield(s: &mut LuaRunState, yield_result: Option<u8>) -> ExecResult {
+
+pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> ExecResult {
     // Move the machine forward until we hit the next yield
+    macro_rules! pop {
+	() => {
+	    match s.current_frame.stack.values.pop() {
+		Some(v) => v,
+		None => {panic!("Popping an empty stack")}
+	    }
+	}
+    }
+
+    macro_rules! push {
+	($v: expr) => {
+	    s.current_frame.stack.values.push($v);
+	}
+    }
+
     loop {
         // let's get the next bytecode instruction to run
         let bc = s.current_frame.pc;
@@ -19,14 +35,14 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, yield_result: Option<u8>) -> Exec
 	//
 	// But if we actually were trying to have the same value we'll allow it
 	// by setting a new one here
-	let mut intended_next_pc: Option<usize> = None;
+	let intended_next_pc: Option<usize> = None;
         match next_instruction {
             BC::NOOP => {panic!("")},
             BC::PUSH_NIL => {panic!("")},
             BC::PUSH_FALSE => {panic!("")},
 	    BC::PUSH_VAL_BY_NAME(val) => {
 		match s.current_frame.env.values.get(val) {
-		    Some(v) => s.current_frame.stack.values.push(v.clone()),
+		    Some(v) => push!(v.clone()),
 		    None => {
 			dbg!(val);
 			panic!("Key not found!")
@@ -34,8 +50,11 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, yield_result: Option<u8>) -> Exec
 		}
 		
 	    },
+	    BC::POP => {
+		
+	    },
 	    BC::PUSH_STRING(val) => {
-		s.current_frame.stack.values.push(LV::LuaS(val.clone()))
+		push!(LV::LuaS(val.clone()))
 	    },
 	    BC::BUILD_LIST(len) => {
 		// when we build a list we collect all the values
@@ -43,11 +62,11 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, yield_result: Option<u8>) -> Exec
 		let mut final_list: Vec<LV> = vec![];
 		for _ in 0..*len {
 		    final_list.push(
-			s.current_frame.stack.values.pop().unwrap()
+			pop!()
 		    )
 		};
 
-		s.current_frame.stack.values.push(
+		push!(
 		    LV::LuaList(final_list)
 		)
 	    },
@@ -57,13 +76,13 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, yield_result: Option<u8>) -> Exec
 		// When calling a function, we need to
 		// get the arguments, then the function
 		// TODO add a macro for pops
-		let args = s.current_frame.stack.values.pop().unwrap();
-		let m_func = s.current_frame.stack.values.pop().unwrap();
+		let args = pop!();
+		let m_func = pop!();
 		// let's actually call the function
 		match m_func {
 		    LV::NativeFunc(f) => {
 			let return_value = f(Some(args));
-			s.current_frame.stack.values.push(return_value);
+			push!(return_value);
 		    },
 		    _ => {
 			dbg!(m_func);

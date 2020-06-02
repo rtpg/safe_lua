@@ -4,14 +4,12 @@ pub mod exec;
 use ::file_contents;
 use std::io::Read;
 use std::collections::HashMap;
-use ast::Block;
 use parse::parse;
 use super::compile::{
     CodeObj,
     compile,
 };
 use std::fs::File;
-use lex;
 use std::rc::Rc;
 
 // our Lua values
@@ -69,7 +67,7 @@ pub fn run_to_checkpoint(state: LuaRunState) -> RunResult {
     return RunResult::Error(String::from("Yikes"));
 }
 
-pub fn lua_print(args: Option<LV>) -> LV {
+pub fn lua_print(_: Option<LV>) -> LV {
     println!("CALLED LUA PRINT");
     return LV::Num(0.0);
 }
@@ -98,8 +96,4 @@ pub fn initial_run_state<'a>(lua_file_path: &'a str) -> LuaRunState {
         current_frame: frame_from_code(boxed_code.clone()),
         frame_stack: vec![],
     };
-}
-
-pub fn load_file(file_path: &str) -> LuaRunState {
-    return initial_run_state(file_path);
 }

@@ -144,7 +144,7 @@ pub fn parse_comment(input: &str) -> IResult<&str, &str> {
                 return Ok(("", input));
             } else{
                 // we now have the start of a thing, try to parse a long block
-                let comment = split_text[0];
+                let _comment = split_text[0];
                 // try to parse a long block out
                 let i = &input[2..];
                 let (i, maybe_long_block) = opt(strings::long_string)(i)?;
@@ -153,7 +153,7 @@ pub fn parse_comment(input: &str) -> IResult<&str, &str> {
                         // no long block, keep the short block result
                         return Ok((split_text[1], ""));
                     },
-                    Some(long_block) => {
+                    Some(_long_block) => {
                         return Ok((i, ""));
                     }
                 }

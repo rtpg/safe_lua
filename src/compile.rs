@@ -355,7 +355,7 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
             // END
             code.emit_fwd_jump_location(for_loop_end);
         },
-        ForIn(namelist, exprlist, block) => {
+        ForIn(_namelist, exprlist, _block) => {
             // for x,y,z,a in explist do block end
             // here the way this works is by evaluating explist
             // and then getting some data to be used as an iterator
@@ -372,14 +372,10 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
         Break => {
             code.emit(BC::BREAK);
         },
-        _ => {
-            dbg!(stat);
-            panic!("Not implemented yet");
-        }
     }
 }
 
-pub fn push_var_assignment(var: &ast::Var, code: &mut impl Code){
+pub fn push_var_assignment(_var: &ast::Var, code: &mut impl Code){
     code.emit(BC::PANIC("Var assignment not implemented yet".to_string()))
 //    panic!("Implement var assignment, should be easy");
 }
@@ -539,8 +535,6 @@ pub fn push_prefixexpr(pexpr: ast::Prefixexpr, code: &mut impl Code){
             MethodCall(_name, _args) => {
                 // a(:name)(args)
                 // a is already on the stack
-                let is_method_call = _name.is_some();
-
                 match &_name {
                     Some(n) => {
                         code.emit(BC::PUSH_STRING(n.to_string()))
@@ -641,29 +635,29 @@ pub fn push_args(args: ast::Args, code: &mut impl Code){
     }
 }
 
-pub fn push_funccall(call: ast::Funccall, code: &mut impl Code){
-    // write the bytecode to call a function and push the result onto the stack
+// pub fn push_funccall(call: ast::Funccall, code: &mut impl Code){
+//     // write the bytecode to call a function and push the result onto the stack
 
-    // there are two modes, based on whether we are in method calling mode or not
-    match call.command_name {
-        None => {
-            // raw function mode
-            // push the function and then the arguments
-            // then trigger a call
-            push_prefixexpr(call.expr, code);
-            push_args(call.args, code);
-            code.emit(BC::CALL_FUNCTION);
-        },
-        Some(name) => {
-            // method mode 
-            // here we push the prefixed expression, name, and arguments
-            push_prefixexpr(call.expr, code);
-            code.emit(BC::PUSH_STRING(name));
-            push_args(call.args, code);
-            code.emit(BC::CALL_METHOD);
-        }
-    }
-}
+//     // there are two modes, based on whether we are in method calling mode or not
+//     match call.command_name {
+//         None => {
+//             // raw function mode
+//             // push the function and then the arguments
+//             // then trigger a call
+//             push_prefixexpr(call.expr, code);
+//             push_args(call.args, code);
+//             code.emit(BC::CALL_FUNCTION);
+//         },
+//         Some(name) => {
+//             // method mode 
+//             // here we push the prefixed expression, name, and arguments
+//             push_prefixexpr(call.expr, code);
+//             code.emit(BC::PUSH_STRING(name));
+//             push_args(call.args, code);
+//             code.emit(BC::CALL_METHOD);
+//         }
+//     }
+// }
 pub fn compile_block(b: ast::Block, code: &mut impl Code) {
     for stat in b.stats {
         compile_stat(stat, code);

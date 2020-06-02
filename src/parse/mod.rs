@@ -30,7 +30,6 @@ use parse::nom::combinator::opt;
 
 use parse::nom::sequence::{
     preceded,
-    terminated,
     pair,
 };
 use parse::nom::multi::many0;
@@ -556,6 +555,7 @@ fn binop_right(i: &IStream) -> IResult<&IStream, (ast::BinaryOperator, ast::Expr
  *
  * a non-panic version of parse
  */
+#[cfg(test)]
 pub fn try_parse(input: &str) -> Option<ast::Block> {
     let (input, tokens) = lex_all(input).unwrap();
     if input.len() > 0 {
@@ -1041,7 +1041,7 @@ local x = 3;
             // ];
     
             // UTF handling
-            let attempted_utf8_check = File::open(unwrapped_path.clone());
+            let _attempted_utf8_check = File::open(unwrapped_path.clone());
 
             let can_read_file = {
                 let mut f = File::open(unwrapped_path.clone()).unwrap();
