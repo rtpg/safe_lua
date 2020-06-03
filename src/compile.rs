@@ -18,12 +18,13 @@ pub enum JumpTarget {
 
 // bytecode commands
 #[allow(non_camel_case_types, dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BC {
     PUSH_NIL,
     PUSH_FALSE, PUSH_TRUE,
     PUSH_NUMERAL(String), PUSH_STRING(String),
-    PUSH_NUMBER(usize),
+    PUSH_NUMBER(f64),
+    PUSH_CODE_INDEX(usize),
     PUSH_NAMELIST(ast::Namelist, bool),
     PUSH_NEW_TBL,
 
@@ -236,6 +237,7 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
                             )
                         )
                     }
+		    code.emit(BC::POP);
                 },
                 None => {
                     // let's just make everything nil
@@ -337,7 +339,7 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
                 },
                 None => {
                     // default step of 1
-                    code.emit(BC::PUSH_NUMBER(1));
+                    code.emit(BC::PUSH_NUMBER(1.0));
                 }
             }
             // here we use specialized op codes for for loops
@@ -380,6 +382,35 @@ pub fn push_var_assignment(_var: &ast::Var, code: &mut impl Code){
 //    panic!("Implement var assignment, should be easy");
 }
 
+pub fn push_numeral(n: &String, code: &mut impl Code){
+
+    // we will parse out the value
+    if n.starts_with("0x") {
+	// hex
+	let hex_wo_pfx = n.trim_start_matches("0x");
+	match i64::from_str_radix(hex_wo_pfx, 16) {
+	    Ok(v) => {
+		// TODO get rid of rounding
+		code.emit(BC::PUSH_NUMBER(v as f64))
+	    },
+	    Err(_) => {
+		dbg!(n);
+		panic!("PARSE FAILURE ON HEX NUMERAL");
+	    }
+	}
+    } else {
+	// not hex
+	match n.parse::<f64>() {
+	    Ok(v) => {
+		code.emit(BC::PUSH_NUMBER(v))
+	    },
+	    Err(_) => {
+		dbg!(n);
+		panic!("PARSE FAILURE ON NUMERAL");
+	    }
+	}
+    }
+}
 pub fn push_expr(expr: ast::Expr, code: &mut impl Code){
     use ast::Expr::*;
 
@@ -387,9 +418,9 @@ pub fn push_expr(expr: ast::Expr, code: &mut impl Code){
         Nil => code.emit(BC::PUSH_NIL),
         False => code.emit(BC::PUSH_FALSE),
         True => code.emit(BC::PUSH_TRUE),
-        Numeral(n) => code.emit(
-            BC::PUSH_NUMERAL(n),
-        ),
+        Numeral(n) => {
+	    push_numeral(&n, code);
+	},
         LiteralString(s) => code.emit(
             BC::PUSH_STRING(s),
         ),
@@ -441,7 +472,7 @@ pub fn push_func(body: ast::Funcbody, code: &mut impl Code){
     compile_block(body.body, &mut inner_code);
 
     let code_index = code.write_inner_code(inner_code);
-    code.emit(BC::PUSH_NUMBER(code_index));
+    code.emit(BC::PUSH_CODE_INDEX(code_index));
     push_parlist(body.parlist, code);
     // this takes the parlist and the code index 
     // and builds a function from it
@@ -491,7 +522,8 @@ pub fn push_table(ctr: ast::Tableconstructor, code: &mut impl Code){
                     },
                     Raw(e) => {
                         code.emit(
-                            BC::PUSH_NUMERAL(raw_idx.to_string()),
+			    BC::PUSH_CODE_INDEX(raw_idx)
+//                            BC::PUSH_NUMERAL(raw_idx.to_string()),
                         );
                         push_expr(e, code);
                         raw_idx += 1;

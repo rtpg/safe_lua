@@ -8,6 +8,8 @@ mod ast;
 mod parse;
 mod lex;
 mod compile;
+mod natives;
+mod lua_stdlib;
 use std::fs::File;
 use std::io::Read;
 mod utils;

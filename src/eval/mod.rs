@@ -5,20 +5,84 @@ use ::file_contents;
 use std::io::Read;
 use std::collections::HashMap;
 use parse::parse;
+use super::ast;
 use super::compile::{
     CodeObj,
     compile,
 };
 use std::fs::File;
 use std::rc::Rc;
+use super::natives::{
+    lua_print,
+    lua_require
+};
+use super::lua_stdlib::stdlib;
 
 // our Lua values
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum LV {
     Num(f64),
     LuaS(String),
     LuaList(Vec<LV>),
-    NativeFunc(fn(Option<LV>) -> LV)
+    LuaTable {
+	v: HashMap<String, LV>
+    },
+    NativeFunc {
+	name: String,
+	f: fn(&LuaRunState, Option<LV>) -> LV
+    },
+    LuaFunc {
+	code_idx: usize,
+	args: ast::Namelist,
+	ellipsis: bool,
+    },
+    // INTERNAL VALUES 
+    // This code index value is just becauze I have usize
+    // and I think I need to be careful here
+    // this value shouldn't leak normally
+    CodeIndex(usize),
+    // namelist. lazy
+    NameList(ast::Namelist, bool)
+}
+
+fn lv_fmt(lv: &LV, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    use self::LV::*;
+    match lv {
+	Num(n) => {
+	    f.debug_struct("LuaNum").field("v", n).finish()
+	},
+	LuaS(s) => {
+	    f.debug_struct("LuaString").field("v", s).finish()
+	},
+	LuaList(l) => {
+	    f.debug_struct("LuaList").field("v", l).finish()
+	},
+	LuaTable{v:t} => {
+	    f.debug_struct("LuaTable").field("v", t).finish()
+	},
+	LuaFunc {code_idx, args, ellipsis: _ellipsis} => {
+	  f.debug_struct("LuaFunc").field("code_idx", code_idx).field("args", args).finish()  
+	},
+	NativeFunc {name, f: _} => {
+	    f.debug_struct("NativeFunc").field("name", name).finish()
+	},
+	CodeIndex(n) => {
+	    f.debug_struct("CodeIndex").field("v", n).finish()
+	},
+	NameList(namelist, ellipsis) => {
+	    f.debug_struct("NameList").field("args", namelist).field("ellipsis", ellipsis).finish()
+	}
+    }
+}
+impl std::fmt::Debug for LV {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	lv_fmt(self, f)
+    }
+}
+impl std::fmt::Display for LV {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	lv_fmt(self, f)
+    }
 }
 
 pub struct LuaValueStack {
@@ -50,6 +114,7 @@ pub struct LuaRunState {
     current_frame: LuaFrame,
     // stack of frames (doesn't include existing frame)
     frame_stack: Vec<LuaFrame>,
+    pub packages: HashMap<String, LV>,
 }
 
 #[allow(dead_code)]
@@ -67,11 +132,24 @@ pub fn run_to_checkpoint(state: LuaRunState) -> RunResult {
     return RunResult::Error(String::from("Yikes"));
 }
 
-pub fn lua_print(_: Option<LV>) -> LV {
-    println!("CALLED LUA PRINT");
-    return LV::Num(0.0);
-}
+pub fn global_env() -> LuaEnv {
+    let globals: Vec<(String, LV)> = vec![
+	("print".to_string(), LV::NativeFunc {
+	    name: "print".to_string(),
+	    f: lua_print
+	}),
+	("require".to_string(), LV::NativeFunc {
+	    name: "require".to_string(),
+	    f: lua_require
+	}),
+    ];
 
+    return LuaEnv {
+	values: globals.iter().cloned().collect()
+    }
+
+    
+}
 pub fn frame_from_code(code:Rc<CodeObj>) -> LuaFrame {
     return LuaFrame {
         code: code,
@@ -79,9 +157,7 @@ pub fn frame_from_code(code:Rc<CodeObj>) -> LuaFrame {
         stack: LuaValueStack {
             values: vec![]
         },
-	env: LuaEnv {
-	    values: [("print".to_string(), LV::NativeFunc(lua_print))].iter().cloned().collect()
-	}
+	env: global_env()
     }
 }
 pub fn initial_run_state<'a>(lua_file_path: &'a str) -> LuaRunState {
@@ -95,5 +171,6 @@ pub fn initial_run_state<'a>(lua_file_path: &'a str) -> LuaRunState {
         compiled_code: boxed_code.clone(),
         current_frame: frame_from_code(boxed_code.clone()),
         frame_stack: vec![],
+	packages: stdlib()
     };
 }

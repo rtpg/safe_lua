@@ -14,6 +14,8 @@ pub mod parse;
 pub mod lex;
 pub mod compile;
 pub mod utils;
+pub mod natives;
+pub mod lua_stdlib;
 pub fn main(){
     println!("Starting lex");
     println!("Starting parse");
