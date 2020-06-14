@@ -159,7 +159,7 @@ pub fn parse_comment(starting_input: LexInput) -> IResult<LexInput, Lex> {
 }
 
 pub fn parse_whitespace(input: LexInput) -> IResult<LexInput, Lex> {
-    let (rest_of_input, ws) = many1(one_of(" \t\n\r"))(input)?;
+    let (rest_of_input, _ws) = many1(one_of(" \t\n\r"))(input)?;
     return Ok((rest_of_input, Lex::Str(rest_of_input.to_string())))
     // match _whitespace_bound(input){
     //     Some(i) => {

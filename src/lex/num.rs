@@ -11,8 +11,6 @@ use nom::bytes::complete::tag;
 use nom::branch::alt;
 use nom::combinator::{ opt, map };
 use super::{Lex, LexInput};
-#[macro_use]
-use assert_full_parse;
 
 use super::super::parse::err_str;
 
@@ -168,8 +166,7 @@ fn parse_nonhex_number(input: LexInput) -> IResult<LexInput, Lex> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-
+    use assert_full_parse;
     fn assert_number_parse(i: &str) {
 	assert_full_parse!(
 	    parse_number,
