@@ -3,10 +3,11 @@
 #[allow(unused_imports)]
 use nom::character::complete::none_of;
 use nom::sequence::preceded;
-use nom::combinator::{map, opt};
+use nom::combinator::{map_res, map, opt};
 use nom::multi::{many0, many1};
 use nom::character::complete::{
     char as char_parse,
+    one_of,
 };
 use nom::character::is_alphanumeric;
 use nom::character::is_alphabetic;
@@ -96,25 +97,47 @@ fn _is_keyword(s: &str) -> bool {
     return KWDS.contains(s);
 }
 
-pub fn parse_name(input: &str) -> IResult<&str, Lex> {
-    match _find_name_bound(input) {
-        Some(idx) => {
-            let (result_name, rest_of_input ) = input.split_at(idx);
-            if _is_keyword(result_name){
-                return Err(
-                    Err::Error((input, ErrorKind::Alpha))
-                );
-            }
+fn alphabetic(input: LexInput) -> IResult<LexInput, char> {
+    return one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")(input);
+}
+fn alphanumeric(input: LexInput) -> IResult<LexInput, char> {
+    return one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")(input);
+}
+type LexInput<'a> = &'a str;
+pub fn parse_name(starting_input: LexInput) -> IResult<LexInput, Lex> {
+    let (input, first_char) = alphabetic(starting_input)?;
+    let (input, rest) = many0(alphanumeric)(input)?;
+    let rest_str: String = rest.into_iter().collect();
+    let result_name = first_char.to_string() + &rest_str;
 
-            return Ok((
-                rest_of_input,
-                Lex::Name(result_name.to_string()),
-            ));
-        },
-        None =>  return Err(
-            Err::Error((input, ErrorKind::Alpha))
-        )
+    if _is_keyword(&result_name){
+        return Err(
+            Err::Error((starting_input, ErrorKind::Alpha))
+        );
     }
+
+    return Ok((
+        input,
+        Lex::Name(result_name),
+    ));
+    // match _find_name_bound(input) {
+    //     Some(idx) => {
+    //         let (result_name, rest_of_input ) = input.split_at(idx);
+    //         if _is_keyword(result_name){
+    //             return err(
+    //                 err::error((input, errorkind::alpha))
+    //             );
+    //         }
+
+    //         return ok((
+    //             rest_of_input,
+    //             lex::name(result_name.to_string()),
+    //         ));
+    //     },
+    //     None =>  return Err(
+    //         Err::Error((input, ErrorKind::Alpha))
+    //     )
+    // }
 }
 
 fn _whitespace_bound(input: &str) -> Option<usize> {
