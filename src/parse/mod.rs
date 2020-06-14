@@ -35,6 +35,7 @@ use parse::nom::sequence::{
 use parse::nom::multi::many0;
 use ast;
 use lex::IStream;
+use lex::LexInput;
 
 use parse::nom::{
     IResult,
@@ -74,7 +75,7 @@ pub fn err<T>(i: &IStream) -> IResult<&IStream, T> {
     );
 }
 
-pub fn err_str<T>(i: &str) -> IResult<&str, T> {
+pub fn err_str<T>(i: LexInput) -> IResult<LexInput, T> {
     return Err(
         Err::Error((i, ErrorKind::Alpha))
     );
@@ -557,8 +558,9 @@ fn binop_right(i: &IStream) -> IResult<&IStream, (ast::BinaryOperator, ast::Expr
  */
 #[cfg(test)]
 pub fn try_parse(input: &str) -> Option<ast::Block> {
+    let input = LexInput::new(input);
     let (input, tokens) = lex_all(input).unwrap();
-    if input.len() > 0 {
+    if input.to_string().len() > 0 {
         // failed lex
         return None;
     }
@@ -571,9 +573,10 @@ pub fn try_parse(input: &str) -> Option<ast::Block> {
 }
 
 pub fn parse(input: &str) -> ast::Block {
+    let input = LexInput::new(input);
     let (input, tokens) = lex_all(input).unwrap();
-    if input.len() > 0 {
-        dbg!(&input[..20]);
+    if input.to_string().len() > 0 {
+        dbg!(&input.to_string()[..20]);
         panic!("remaining input");
     }
     let (remaining_tokens, b) = block(&tokens).unwrap();
@@ -598,9 +601,9 @@ mod tests {
 
     macro_rules! assert_parse_all {
         ($parser:expr, $input:expr) => {
-            let (remaining_input, lexed) = lex_all($input).unwrap();
-            if remaining_input.len() != 0 {
-                dbg!(&remaining_input[..remaining_input.len().min(10)]);
+            let (remaining_input, lexed) = lex_all(LexInput::new($input)).unwrap();
+            if remaining_input.to_string().len() != 0 {
+                dbg!(&remaining_input.to_string()[..remaining_input.to_string().len().min(10)]);
                 panic!("Input remained from lexing")
             }
             let (remaining_tokens, _) = $parser(&lexed).unwrap();
@@ -996,7 +999,7 @@ end
         let input = r#"
 local x = 3;
         "#;
-        let (_, lexed) = lex_all(input).unwrap();
+        let (_, lexed) = lex_all(LexInput::new(input)).unwrap();
         println!("Successfully lexed");
         dbg!(stat(&lexed)).unwrap();
         // parse(input) ;
@@ -1004,7 +1007,7 @@ local x = 3;
 
     #[test]
     fn test_kwd_parse(){
-        let lexed = lex_all(",").unwrap().1;
+        let lexed = lex_all(LexInput::new(",")).unwrap().1;
         assert_eq!(
             kwd(",")(&lexed),
             Ok((
@@ -1101,7 +1104,7 @@ local x = 3;
     }
     #[test]
     fn test_parse(){
-        let l: Vec<lex::Lex> = lex_all("nil").unwrap().1;
+        let l: Vec<lex::Lex> = lex_all(LexInput::new("nil")).unwrap().1;
         assert_eq!( 
             expr(&l),
          Ok((
@@ -1109,7 +1112,7 @@ local x = 3;
             ast::Expr::Nil
         )));
 
-        let m: Vec<lex::Lex> = lex_all("'hi this is a string with an \\' escape'").unwrap().1;
+        let m: Vec<lex::Lex> = lex_all(LexInput::new("'hi this is a string with an \\' escape'")).unwrap().1;
 
         assert_eq!(
             expr(&m),Ok((

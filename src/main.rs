@@ -1,4 +1,5 @@
 extern crate nom;
+extern crate nom_locate;
 
 #[macro_use]
 extern crate lazy_static;
@@ -22,11 +23,12 @@ fn main(){
     dbg!(&file);
     file.read_to_string(&mut contents).unwrap();
     println!("Starting lex");
-    let lex_result = lex::lex_all(contents.as_str());
+    let contents_lex = lex::LexInput::new(&contents);
+    let lex_result = lex::lex_all(contents_lex);
     // dbg!(lex_result).unwrap();
 
     println!("Starting parse");
-    let parse_result = parse::parse(contents.as_str());
+    let parse_result = parse::parse(&contents);
     dbg!(parse_result.clone());
 
     println!("starting compile");

@@ -2,7 +2,7 @@ use super::*;
 use nom::multi::many_till;
 use nom::character::complete::anychar;
 
-pub fn control_character(input: &str) -> IResult<&str, char> {
+pub fn control_character(input: LexInput) -> IResult<LexInput, char> {
     // parse out control character after slash
     return alt((
         map(char_parse('n'), |_| '\n'),
@@ -11,7 +11,7 @@ pub fn control_character(input: &str) -> IResult<&str, char> {
     ))(input);
 }
 
-pub fn short_string(input: &str) -> IResult<&str, Lex>{
+pub fn short_string(input: LexInput) -> IResult<LexInput, Lex>{
     // get start quote
     let (input, start_quote) = alt((
         char_parse('\''),
@@ -44,7 +44,6 @@ pub fn short_string(input: &str) -> IResult<&str, Lex>{
     return Ok((input, Lex::Str(string_contents.iter().collect())));
 }
 
-type LexInput<'a> = &'a str;
 
 pub fn long_string(input: LexInput) -> IResult<LexInput, Lex> {
     use parse::utils::surrounded;
@@ -70,7 +69,7 @@ pub fn long_string(input: LexInput) -> IResult<LexInput, Lex> {
     return Ok((input, Lex::Str(string_contents.into_iter().collect())));
 }
 
-pub fn parse_string(input: &str) -> IResult<&str, Lex> {
+pub fn parse_string(input: LexInput) -> IResult<LexInput, Lex> {
     return alt((
         short_string,
         long_string,

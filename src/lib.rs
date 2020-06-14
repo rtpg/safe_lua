@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 extern crate nom;
+extern crate nom_locate;
 
 #[macro_use]
 extern crate lazy_static;

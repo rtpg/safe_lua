@@ -10,10 +10,13 @@ use nom::sequence::{
 use nom::bytes::complete::tag;
 use nom::branch::alt;
 use nom::combinator::{ opt, map };
-use super::Lex;
+use super::{Lex, LexInput};
+#[macro_use]
+use assert_full_parse;
+
 use super::super::parse::err_str;
 
-fn hex_parse(i: &str) -> IResult<&str, String> {
+fn hex_parse(i: LexInput) -> IResult<LexInput, String> {
     let (i, hex_prefix) = alt((tag("0x"), tag("0X")))(i)?;
     let (i, maybe_hex_digits) = opt(hex_digit1)(i)?;
     let (i, maybe_fraction) = opt(
@@ -36,7 +39,7 @@ fn hex_parse(i: &str) -> IResult<&str, String> {
 
     let hex_digits = match maybe_hex_digits {
         None => "0",
-        Some(n) => n
+        Some(n) => n.fragment()
     };
 
     let (i, maybe_exponent) = opt(
@@ -56,7 +59,7 @@ fn hex_parse(i: &str) -> IResult<&str, String> {
         Some(None) => {},
         Some(Some(fractions)) => {
            result += ".";
-           result += fractions;
+           result += &fractions.to_string();
         }
     }
 
@@ -67,19 +70,19 @@ fn hex_parse(i: &str) -> IResult<&str, String> {
         Some(
             (exponent, (maybe_sign, digits))
         ) => {
-            result += exponent;
+            result += &exponent.to_string();
             match maybe_sign {
                 None => {},
-                Some(s) => { result += s }
+                Some(s) => { result += &s.to_string() }
             };
-            result += digits;
+            result += &digits.to_string();
         }
     };
 
     return Ok((i, result));
 }
 
-pub fn parse_number(i: &str) -> IResult<&str, Lex>{
+pub fn parse_number(i: LexInput) -> IResult<LexInput, Lex>{
     return alt((
         map(
             hex_parse,
@@ -89,7 +92,7 @@ pub fn parse_number(i: &str) -> IResult<&str, Lex>{
     ))(i);
 }
 
-fn parse_nonhex_number(input: &str) -> IResult<&str, Lex> {
+fn parse_nonhex_number(input: LexInput) -> IResult<LexInput, Lex> {
     let (i, maybe_whole_part) = opt(digit1)(input)?;
     let (i, maybe_fraction) = opt(
         preceded(
@@ -118,7 +121,7 @@ fn parse_nonhex_number(input: &str) -> IResult<&str, Lex> {
     }
     // here either we have a dot or a whole part first
     let whole_part = match maybe_whole_part {
-        Some(n) => n,
+        Some(n) => &n.fragment(),
         None => "0",
     };
 
@@ -139,7 +142,7 @@ fn parse_nonhex_number(input: &str) -> IResult<&str, Lex> {
         Some(None) => {}
         Some(Some(fraction)) => {
             result += ".";
-            result += fraction;
+            result += &fraction.to_string();
         }
     }
 
@@ -148,14 +151,14 @@ fn parse_nonhex_number(input: &str) -> IResult<&str, Lex> {
         Some(
             (exponent, (maybe_sign, digits))
         ) => {
-            result += exponent;
+            result += &exponent.to_string();
             match maybe_sign {
                 None => {},
                 Some(sign) => {
-                    result += sign;
+                    result += &sign.to_string();
                 }
             }
-            result += digits;
+            result += &digits.to_string();
         }
     }
 
@@ -166,15 +169,14 @@ fn parse_nonhex_number(input: &str) -> IResult<&str, Lex> {
 mod tests {
     use super::*;
 
-    macro_rules! assert_number_parse {
-        ($input: expr) => {
-            assert_eq!(
-                parse_number(&$input.to_string()),
-                Ok(("", Lex::Number($input.to_string())))
-            );
-        };
-    }
 
+    fn assert_number_parse(i: &str) {
+	assert_full_parse!(
+	    parse_number,
+	    i,
+	    Lex::Number(i.to_string())
+	);
+    }
     #[test]
     fn test_num_parse(){
         let valid_numbers = r#"
@@ -185,7 +187,7 @@ mod tests {
 
         for n in valid_numbers.split_whitespace() {
             let value = n.to_string();
-            assert_number_parse!(value);
+            assert_number_parse(&value);
         }
     }
 }
