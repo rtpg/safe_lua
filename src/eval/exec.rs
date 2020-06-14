@@ -1,7 +1,11 @@
 use eval::LuaRunState;
 use eval::LV;
 use eval::LuaValueStack;
-use compile::BC;
+use compile::{
+    BC,
+    JumpTarget
+};
+use natives::binops::*;
 
 pub enum ExecResult {
     Error(String),
@@ -50,11 +54,30 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 	//
 	// But if we actually were trying to have the same value we'll allow it
 	// by setting a new one here
-	let intended_next_pc: Option<usize> = None;
+	let mut intended_next_pc: Option<JumpTarget> = None;
+	dbg!(next_instruction);
         match next_instruction {
-            BC::NOOP => {panic!("")},
-            BC::PUSH_NIL => {panic!("")},
-            BC::PUSH_FALSE => {panic!("")},
+            BC::NOOP => {
+		// noop, just do nothing
+	    },
+	    BC::JUMP_FALSE(tgt) => {
+		let check = pop!();
+		match check {
+		    LV::LuaFalse => {
+			// jump to the table
+			intended_next_pc = Some(tgt.clone());
+		    },
+		    _ => {
+			// we will not jump here and just let the system go to the next spot
+		    }
+		}
+	    }
+            BC::PUSH_NIL => {
+		push(s, LV::LuaNil);
+	    },
+            BC::PUSH_FALSE => {
+		push(s, LV::LuaFalse);
+	    },
 	    BC::PUSH_VAL_BY_NAME(val) => {
 		let v1 = s.current_frame.env.values.get(val);
 		match v1 {
@@ -74,6 +97,13 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 	    },
 	    BC::PUSH_CODE_INDEX(n) => {
 		push(s, LV::CodeIndex(*n))
+	    },
+	    BC::ASSIGN_NAME(n) => {
+		let val = pop!();
+		s.current_frame.env.values.insert(
+		    n.to_string(),
+		    val
+		);
 	    },
 	    BC::POP => {
 		pop!();
@@ -98,6 +128,19 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 		    s,
 		    LV::LuaList(final_list)
 		)
+	    },
+	    BC::BINOP(binop) => {
+                let r = pop!();
+                let l = pop!();
+		let result = match binop.as_ref() {
+		    "==" => lua_binop_eq(&l, &r),
+		    "^" => lua_exponent_eq(&l, &r),
+		    _ => {
+			dbg!(binop);
+			panic!("Unknown binop");
+		    }
+		};
+		push(s, result);
 	    },
 	    BC::ASSIGN_LOCAL_FROM_EXPRLIST(name, sz) => {
 		match peek(s) {
@@ -203,8 +246,22 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
             }
         }
 	match intended_next_pc {
-	    Some(pc) => {
-		s.current_frame.pc = pc;
+	    Some(tgt) => {
+		match tgt {
+		    JumpTarget::CodeLoc(pc) => {
+			s.current_frame.pc = pc;
+		    },
+		    JumpTarget::JumpTable(loc) => {
+			match s.current_frame.code.jump_target.get(loc) {
+			    Some(Some(n)) => {
+				s.current_frame.pc = *n;
+			    },
+			    _ => {
+				panic!("Failed jump table lookup");
+			    }
+			}
+		    }
+		}
 	    },
 	    None => {
 		// if we have not provided anything, just increment by 1

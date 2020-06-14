@@ -1,3 +1,5 @@
+pub mod binops;
+
 use super::eval::{
     LV,
     LuaRunState
@@ -29,9 +31,33 @@ fn unwrap_single_arg(args: Option<LV>) -> Option<LV> {
 	}
     }
 }
-pub fn lua_print(_s: &LuaRunState, _args: Option<LV>) -> LV {
+pub fn lua_assert(_s: &LuaRunState, args: Option<LV>) -> LV {
+    match unwrap_single_arg(args){
+	Some(arg) => {
+	    match arg {
+		LV::LuaTrue => {return LV::LuaNil},
+		_ => {
+		    dbg!(arg);
+		    panic!("Assertion failure in Lua Execution");
+		}
+	    }
+	},
+	None => {
+	    panic!("Arity failure calling assert");
+	}
+    }
+}
+pub fn lua_print(_s: &LuaRunState, args: Option<LV>) -> LV {
     println!("CALLED LUA PRINT");
-    return LV::Num(0.0);
+    match unwrap_single_arg(args){
+	Some(arg) => {
+	    dbg!(arg);
+	    return LV::LuaNil;
+	},
+	None => {
+	    panic!("Wrong arity for lua_print");
+	}
+    }
 }
 
 pub fn lua_require(s: &LuaRunState, args: Option<LV>) -> LV {

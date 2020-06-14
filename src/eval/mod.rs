@@ -13,6 +13,7 @@ use super::compile::{
 use std::fs::File;
 use std::rc::Rc;
 use super::natives::{
+    lua_assert,
     lua_print,
     lua_require
 };
@@ -42,7 +43,10 @@ pub enum LV {
     // this value shouldn't leak normally
     CodeIndex(usize),
     // namelist. lazy
-    NameList(ast::Namelist, bool)
+    NameList(ast::Namelist, bool),
+    LuaNil,
+    LuaTrue,
+    LuaFalse,
 }
 
 fn lv_fmt(lv: &LV, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -71,6 +75,15 @@ fn lv_fmt(lv: &LV, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 	},
 	NameList(namelist, ellipsis) => {
 	    f.debug_struct("NameList").field("args", namelist).field("ellipsis", ellipsis).finish()
+	},
+	LuaNil => {
+	    f.debug_struct("Nil").finish()
+	},
+	LuaTrue => {
+	    f.debug_struct("True").finish()
+	},
+	LuaFalse => {
+	    f.debug_struct("False").finish()
 	}
     }
 }
@@ -142,6 +155,10 @@ pub fn global_env() -> LuaEnv {
 	    name: "require".to_string(),
 	    f: lua_require
 	}),
+	("assert".to_string(), LV::NativeFunc {
+	    name: "assert".to_string(),
+	    f: lua_assert
+	})
     ];
 
     return LuaEnv {

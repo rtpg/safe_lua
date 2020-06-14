@@ -49,6 +49,13 @@ pub enum BC {
     // table operator
     ASSIGN_TABLE_VALUE,
 
+    // foo = bar
+    // n = $1
+    ASSIGN_NAME(Name),
+    // $1[$2]  = $3
+    ASSIGN_ARR_ACCESS(),
+    // $1.n = $2
+    ASSIGN_DOT_ACCESS(Name),
     // call function (normal)
     CALL_FUNCTION,
     // call function (method)
@@ -111,7 +118,7 @@ pub struct CodeObj {
     labels: HashMap<String, usize>,
     // jump targets, used for looping etc
     // jump_target[i] stores the code location to jump to
-    jump_target: Vec<Option<usize>>,
+    pub jump_target: Vec<Option<usize>>,
 }
 
 
@@ -180,7 +187,7 @@ impl Code for CodeObj {
 }
 
 
-pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
+pub fn compile_stat(stat: &ast::Stat, code: &mut impl Code){
     use ast::Stat::*;
 
     match stat {
@@ -191,11 +198,11 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
             code.emit(BC::POP);
         },
         Label(name) => {
-            code.add_label(name);
+            code.add_label(name.to_string());
         },
         Goto(name) => {
             code.emit(
-                BC::GOTO(name)
+                BC::GOTO(name.to_string())
             )
         },
         Do(block) => {
@@ -243,7 +250,7 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
                     // let's just make everything nil
                     for name in namelist {
                         code.emit(
-                            BC::ASSIGN_LOCAL_NIL(name)
+                            BC::ASSIGN_LOCAL_NIL(name.to_string())
                         )
                     }
                 }
@@ -252,7 +259,7 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
         LocalFuncDecl(name, funcbody) => {
             push_func(funcbody, code);
             code.emit(
-                BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(name)
+                BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(name.to_string())
             );
         },
         Eql(varlist, exprlist) => {
@@ -327,7 +334,7 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
             }
             push_func(funcbody, code);
             code.emit(
-                BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(funcname.first_name_component)
+                BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(funcname.first_name_component.clone())
             );
         },
         For(name, start_value, limit, maybe_step, block) => {
@@ -347,7 +354,7 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
             code.emit(BC::FOR_LOOP_INIT);
             let for_loop_block_start = code.emit_jump_location();
             let for_loop_end = code.prep_fwd_jump();
-            code.emit(BC::FOR_LOOP_CHECK_CONDITION(name));
+            code.emit(BC::FOR_LOOP_CHECK_CONDITION(name.to_string()));
             // if the condition is not valid we jump out
             code.emit(BC::JUMP_FALSE(for_loop_end.clone()));
             // here we actually run the loop
@@ -377,9 +384,23 @@ pub fn compile_stat(stat: ast::Stat, code: &mut impl Code){
     }
 }
 
-pub fn push_var_assignment(_var: &ast::Var, code: &mut impl Code){
-    code.emit(BC::PANIC("Var assignment not implemented yet".to_string()))
-//    panic!("Implement var assignment, should be easy");
+pub fn push_var_assignment(var: &ast::Var, code: &mut impl Code){
+    use super::ast::Var::*;
+    match var {
+	N(name) => {
+	    // just assign directly;
+	    code.emit(BC::ASSIGN_NAME(name.to_string()));
+	},
+	ArrAccess(prefix_expr, expr) => {
+	    push_expr(expr, code);
+	    push_prefixexpr(prefix_expr, code);
+	    code.emit(BC::ASSIGN_ARR_ACCESS());
+	},
+	DotAccess(prefix_expr, name) => {
+	    push_prefixexpr(prefix_expr, code);
+	    code.emit(BC::ASSIGN_DOT_ACCESS(name.to_string()));
+	}
+    }
 }
 
 pub fn push_numeral(n: &String, code: &mut impl Code){
@@ -411,7 +432,7 @@ pub fn push_numeral(n: &String, code: &mut impl Code){
 	}
     }
 }
-pub fn push_expr(expr: ast::Expr, code: &mut impl Code){
+pub fn push_expr(expr: &ast::Expr, code: &mut impl Code){
     use ast::Expr::*;
 
     match expr {
@@ -422,28 +443,28 @@ pub fn push_expr(expr: ast::Expr, code: &mut impl Code){
 	    push_numeral(&n, code);
 	},
         LiteralString(s) => code.emit(
-            BC::PUSH_STRING(s),
+            BC::PUSH_STRING(s.to_string()),
         ),
         Ellipsis => panic!("No ellipsis support yet"),
         BinOp(left, op, right) => {
             // here we need to push the left and right expressions
             // then evaluate the operator
-            push_expr(*left, code);
-            push_expr(*right, code);
+            push_expr(left, code);
+            push_expr(right, code);
             // this should panic
             if let lex::Lex::Keyword(raw_op) = op {
-                code.emit(BC::BINOP(raw_op));
+                code.emit(BC::BINOP(raw_op.to_string()));
             } else {
                 panic!("Invalid binary operator");
             }
         },
         UnOp(op, left) => {
             // here just have to process one operator
-            push_expr(*left, code);
-            code.emit(BC::UNOP(op));
+            push_expr(left, code);
+            code.emit(BC::UNOP(op.to_string()));
         },
         Pref(prefixed_expr) => {
-            push_prefixexpr(*prefixed_expr, code);
+            push_prefixexpr(prefixed_expr, code);
         },
         Tbl(ctr) => {
             push_table(ctr, code);
@@ -463,36 +484,36 @@ pub fn new_code_obj() -> CodeObj {
     }
 }
 
-pub fn push_func(body: ast::Funcbody, code: &mut impl Code){
+pub fn push_func(body: &ast::Funcbody, code: &mut impl Code){
     // take a function body and register the op codes to push it to the stack
     // we'll need to build up a code object for this body to represent in the
     // bytecode as well
     let mut inner_code = new_code_obj();
     // this inner code object will hold our body 
-    compile_block(body.body, &mut inner_code);
+    compile_block(&body.body, &mut inner_code);
 
     let code_index = code.write_inner_code(inner_code);
     code.emit(BC::PUSH_CODE_INDEX(code_index));
-    push_parlist(body.parlist, code);
+    push_parlist(&body.parlist, code);
     // this takes the parlist and the code index 
     // and builds a function from it
     code.emit(BC::BUILD_FUNCTION);
 }
 
-pub fn push_parlist(maybe_parlist: Option<ast::Parlist>, code: &mut impl Code){
+pub fn push_parlist(maybe_parlist: &Option<ast::Parlist>, code: &mut impl Code){
     match maybe_parlist {
         None => code.emit(BC::PUSH_NIL),
         Some(parlist) => {
             code.emit(
                 BC::PUSH_NAMELIST(
-                    parlist.namelist,
+                    parlist.namelist.clone(),
                     parlist.has_ellipsis,
                 )
             )
         }
     }
 }
-pub fn push_table(ctr: ast::Tableconstructor, code: &mut impl Code){
+pub fn push_table(ctr: &ast::Tableconstructor, code: &mut impl Code){
     use ast::Field::*;
 
     // push a table based on its constructor
@@ -516,7 +537,7 @@ pub fn push_table(ctr: ast::Tableconstructor, code: &mut impl Code){
                     Named(n, v) => {
                         // here we want to emit the string
                         code.emit(
-                            BC::PUSH_STRING(n),
+                            BC::PUSH_STRING(n.to_string()),
                         );
                         push_expr(v, code);
                     },
@@ -538,30 +559,30 @@ pub fn push_table(ctr: ast::Tableconstructor, code: &mut impl Code){
     }
 }
 
-pub fn push_prefixexpr(pexpr: ast::Prefixexpr, code: &mut impl Code){
+pub fn push_prefixexpr(pexpr: &ast::Prefixexpr, code: &mut impl Code){
     use ast::Prefix::*;
     use ast::Suffix::*;
 
-    match pexpr.prefix {
-        ParenedExpr(e) => push_expr(e, code),
+    match &pexpr.prefix {
+        ParenedExpr(e) => push_expr(&e, code),
         Varname(n) => push_variable(
-            ast::Var::N(n), code)
+            &ast::Var::N(n.to_string()), code)
     }
 
-    for suffix in pexpr.suffixes { 
+    for suffix in &pexpr.suffixes { 
         match suffix {
             ArrAccess(expr) => {
                 // a[b]
                 // a is already on the stack
                 // push b
-                push_expr(expr, code);
+                push_expr(&expr, code);
                 code.emit(BC::ARRAY_ACCESS);
             },
             DotAccess(name) => {
                 // a.b
                 // a is already on the satck
                 // push b
-                code.emit(BC::PUSH_STRING(name));
+                code.emit(BC::PUSH_STRING(name.to_string()));
                 code.emit(BC::DOT_ACCESS);
             },
             MethodCall(_name, _args) => {
@@ -575,7 +596,7 @@ pub fn push_prefixexpr(pexpr: ast::Prefixexpr, code: &mut impl Code){
                 }
 
                 // also push the arguments on the stack
-                push_args(_args, code);
+                push_args(&_args, code);
 
                 match _name {
                     Some(_n) => {
@@ -590,14 +611,14 @@ pub fn push_prefixexpr(pexpr: ast::Prefixexpr, code: &mut impl Code){
     }
 }
 
-pub fn push_variable(v: ast::Var, code: &mut impl Code){
+pub fn push_variable(v: &ast::Var, code: &mut impl Code){
     use ast::Var::*;
 
     match v {
         N(name) => {
             // name access
             code.emit(
-                BC::PUSH_VAL_BY_NAME(name)
+                BC::PUSH_VAL_BY_NAME(name.to_string())
             )
         },
         ArrAccess(prefix_expr, expr) => {
@@ -613,13 +634,13 @@ pub fn push_variable(v: ast::Var, code: &mut impl Code){
             // push a
             push_prefixexpr(prefix_expr, code);
             // push b
-            code.emit(BC::PUSH_STRING(name));
+            code.emit(BC::PUSH_STRING(name.to_string()));
             code.emit(BC::DOT_ACCESS);
         }
     }
 }
 
-pub fn push_exprlist(exprs: Vec<ast::Expr>, code: &mut impl Code){
+pub fn push_exprlist(exprs: &Vec<ast::Expr>, code: &mut impl Code){
     // take a list of expressions, and build the list from the values
     // being in the stack
     // [] -> [list_of_expressions]
@@ -631,7 +652,7 @@ pub fn push_exprlist(exprs: Vec<ast::Expr>, code: &mut impl Code){
 }
 
 
-pub fn push_args(args: ast::Args, code: &mut impl Code){
+pub fn push_args(args: &ast::Args, code: &mut impl Code){
     // build up the argument list for passing to a function
     // at the end we should have on top of the stack one list element
     // holding our arguments
@@ -640,7 +661,7 @@ pub fn push_args(args: ast::Args, code: &mut impl Code){
     match args {
         Literal(s) => {
             // just build the string and make a list
-            code.emit(BC::PUSH_STRING(s));
+            code.emit(BC::PUSH_STRING(s.to_string()));
             code.emit(BC::BUILD_LIST(1));
         },
         Table(ctr) => {
@@ -690,15 +711,15 @@ pub fn push_args(args: ast::Args, code: &mut impl Code){
 //         }
 //     }
 // }
-pub fn compile_block(b: ast::Block, code: &mut impl Code) {
-    for stat in b.stats {
-        compile_stat(stat, code);
+pub fn compile_block(b: &ast::Block, code: &mut impl Code) {
+    for stat in &b.stats {
+        compile_stat(&stat, code);
     }
 
-    match b.retstat {
+    match &b.retstat {
         None => {},
         Some(retstat) => {
-            match retstat.return_expr {
+            match &retstat.return_expr {
                 None => code.emit(BC::RETURN_NONE),
                 Some(exprlist) => {
                     if exprlist.len() == 0 {
@@ -712,7 +733,7 @@ pub fn compile_block(b: ast::Block, code: &mut impl Code) {
                         // this pushes exprlist.len() elements to stack
                         let exprlist_len = exprlist.len();
                         for expr in exprlist {
-                            push_expr(expr, code);
+                            push_expr(&expr, code);
                         }
                         // this pops exprlist.len() elements to the stack
                         // then adds one
@@ -729,6 +750,6 @@ pub fn compile_block(b: ast::Block, code: &mut impl Code) {
 }
 pub fn compile(parsed_block: ast::Block) -> CodeObj {
     let mut code = new_code_obj();
-    compile_block(parsed_block, &mut code);
+    compile_block(&parsed_block, &mut code);
     return code;
 }
