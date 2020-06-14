@@ -120,24 +120,6 @@ pub fn parse_name(starting_input: LexInput) -> IResult<LexInput, Lex> {
         input,
         Lex::Name(result_name),
     ));
-    // match _find_name_bound(input) {
-    //     Some(idx) => {
-    //         let (result_name, rest_of_input ) = input.split_at(idx);
-    //         if _is_keyword(result_name){
-    //             return err(
-    //                 err::error((input, errorkind::alpha))
-    //             );
-    //         }
-
-    //         return ok((
-    //             rest_of_input,
-    //             lex::name(result_name.to_string()),
-    //         ));
-    //     },
-    //     None =>  return Err(
-    //         Err::Error((input, ErrorKind::Alpha))
-    //     )
-    // }
 }
 
 fn _whitespace_bound(input: &str) -> Option<usize> {
@@ -158,43 +140,26 @@ fn _whitespace_bound(input: &str) -> Option<usize> {
     return Some(input.len());
 }
 
-pub fn parse_comment(input: &str) -> IResult<&str, &str> {
-    match &input.get(..2) {
-        Some("--") => {
-            // dealing with a comment
-            let split_text: Vec<&str> = input.splitn(2, "\n").collect();
-            if split_text.len() == 1 {
-                return Ok(("", input));
-            } else{
-                // we now have the start of a thing, try to parse a long block
-                let _comment = split_text[0];
-                // try to parse a long block out
-                let i = &input[2..];
-                let (i, maybe_long_block) = opt(strings::long_string)(i)?;
-                match maybe_long_block {
-                    None => {
-                        // no long block, keep the short block result
-                        return Ok((split_text[1], ""));
-                    },
-                    Some(_long_block) => {
-                        return Ok((i, ""));
-                    }
-                }
-            }
-        },
-        _ => {
-            return Err(
-                Err::Error((input, ErrorKind::Tag))
-            );
-        }
+pub fn parse_comment(starting_input: LexInput) -> IResult<LexInput, Lex> {
+    // start with the comment tag
+    let (input, _ ) = tag("--")(starting_input)?;
+
+    match strings::long_string(input) {
+	Ok(ls_result) => Ok(ls_result),
+	_ => {
+	    // not a long string, just parse to the end of the line
+	    let (input, comment_body) = many0(none_of("\n"))(input)?;
+	    let comment_body_str = comment_body.into_iter().collect();
+	    Ok((input, Lex::Str(comment_body_str)))
+	}
     }
 }
 
-pub fn parse_whitespace(input: &str) -> IResult<&str, &str> {
+pub fn parse_whitespace(input: &str) -> IResult<&str, Lex> {
     match _whitespace_bound(input){
         Some(i) => {
             let (ws, rest_of_input) = input.split_at(i);
-            return Ok((rest_of_input, ws));
+            return Ok((rest_of_input, Lex::Str(ws.to_string())));
         },
         None => {
             return Err(
@@ -298,7 +263,7 @@ mod tests {
     fn test_basic_lexing(){
         assert_eq!(
             parse_comment("-- hi there"),
-            Ok(("", "-- hi there"))
+            Ok(("", Lex::Str(" hi there".to_string())))
         );
 
         assert_eq!(

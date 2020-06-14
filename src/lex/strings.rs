@@ -44,8 +44,9 @@ pub fn short_string(input: &str) -> IResult<&str, Lex>{
     return Ok((input, Lex::Str(string_contents.iter().collect())));
 }
 
+type LexInput<'a> = &'a str;
 
-pub fn long_string(input: &str) -> IResult<&str, Lex> {
+pub fn long_string(input: LexInput) -> IResult<LexInput, Lex> {
     use parse::utils::surrounded;
 
     // first let's find the opening brackets
