@@ -1,6 +1,7 @@
 use super::*;
 
-pub fn funcname(i: &IStream) -> IResult<&IStream, ast::Funcname> {
+pub fn funcname<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Funcname> {
+    
     let (i, f_n) = name(i)?;
     let (i, o_n_c) = many0(preceded(kwd("."), name))(i)?;
     let (i, m_m_c) = opt(preceded(kwd(":"), name))(i)?;
@@ -12,7 +13,7 @@ pub fn funcname(i: &IStream) -> IResult<&IStream, ast::Funcname> {
 }
 
 
-pub fn funcbody(i: &IStream) -> IResult<&IStream, ast::Funcbody> {
+pub fn funcbody<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Funcbody> {
     let (i, m_parlist) = surrounded(
         kwd("("),
         opt(parlist),

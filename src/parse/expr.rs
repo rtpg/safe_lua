@@ -1,6 +1,6 @@
 use super::*;
 
-pub fn expr(i: &IStream) -> IResult<&IStream, ast::Expr>{
+pub fn expr<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Expr>{
     // parse out any unary operators and then read inner expressions;
 
     let (i, mut unops) = many0(unary_op)(i)?;
@@ -18,7 +18,7 @@ pub fn expr(i: &IStream) -> IResult<&IStream, ast::Expr>{
     return Ok((i, return_result));
 }
 
-fn expr2(i: &IStream) -> IResult<&IStream, ast::Expr> {
+fn expr2<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Expr> {
     // basically, parse binary opereators since they're 
     // left recursive
     let (i, first_expr) = expr_consume(i)?;
@@ -41,14 +41,14 @@ fn expr2(i: &IStream) -> IResult<&IStream, ast::Expr> {
 }
 
 
-fn expr_consume(i: &IStream) -> IResult<&IStream, ast::Expr> {
+fn expr_consume<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Expr> {
     return alt((
         expr_constants,
         map(prefixexp, |p| ast::Expr::Pref(Box::new(p))),
     ))(i);
 }
 
-fn expr_constants(i: &IStream) -> IResult<&IStream, ast::Expr> {
+fn expr_constants<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Expr> {
     // return expr constants or parenthesized
     return alt((
         map(kwd("nil"), |_| ast::Expr::Nil),

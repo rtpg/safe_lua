@@ -15,7 +15,6 @@ use parse::func::{
 };
 
 use lex::{
-    ISlice,
     lex_all
 };
 
@@ -59,7 +58,7 @@ use parse::nom::{
 // }
 
 #[allow(dead_code)]
-fn chunk(i: &IStream) -> IResult<&IStream, ast::Chunk> {
+fn chunk<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Chunk> {
     let (i, bl) = block(i)?;
     return Ok((i, ast::Chunk {block: bl}));
 }
@@ -69,7 +68,7 @@ fn num_component(i: char) -> bool {
     return i.is_numeric();
 }
 
-pub fn err<T>(i: &IStream) -> IResult<&IStream, T> {
+pub fn err<'a, T>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, T> {
     return Err(
         Err::Error((i, ErrorKind::Alpha))
     );
@@ -82,18 +81,21 @@ pub fn err_str<T>(i: LexInput) -> IResult<LexInput, T> {
 }
 
 
-fn num_parser(i: &IStream) -> IResult<&ISlice, ast::Expr> {
+fn num_parser<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Expr> {
     match i.get(0) {
-        Some(lex::Lex::Number(n)) => return Ok((
+        Some(Lex {
+	    location: loc,
+	    val: Number(n)
+	}) => return Ok((
             &i[1..], ast::Expr::Numeral(n.to_string())
         )),
         _ => return err(i)
     }
 }
 
-fn literal_string_parser(i: &IStream) -> IResult<&ISlice, String> {
+fn literal_string_parser<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, String> {
     match i.get(0) {
-        Some(lex::Lex::Str(n)) => return Ok((
+        Some(Lex {location: loc, val: Str(n)}) => return Ok((
             &i[1..], n.to_string()
         )),
         _ => return Err(
@@ -102,9 +104,12 @@ fn literal_string_parser(i: &IStream) -> IResult<&ISlice, String> {
     }
 }
 
-fn name(i: &IStream) -> IResult<&ISlice, String> {
+use lex::Lex;
+use lex::LexValue::*;
+
+fn name<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, String> {
     match i.get(0) {
-        Some(lex::Lex::Name(n)) => return Ok((
+        Some(Lex {location: loc, val: Name(n)}) => return Ok((
             &i[1..], n.to_string()
         )),
         _ => return Err(
@@ -113,23 +118,31 @@ fn name(i: &IStream) -> IResult<&ISlice, String> {
     }
 }
 
-fn kwd<'a>(tag: &'a str) -> impl Fn(&'a IStream) -> IResult<&'a IStream, lex::Lex> {
+fn kwd<'a>(tag: &'a str) -> impl Fn(&'a IStream<'a>) -> IResult<&'a IStream<'a>, lex::Lex> {
     move |i: &IStream| {
         let s = tag.clone();
         let token = i.get(0);
-        match token{
-            Some(lex::Lex::Keyword(_s)) => {
+        match token {
+            Some(Lex {location:loc,
+                      val: lex::LexValue::Keyword(_s)}) => {
                 if s == _s {
-                    return Ok((&i[1..], lex::Lex::Keyword(_s.to_string())))
+                    return Ok((&i[1..],
+			       lex::Lex {
+				   location: *loc,
+				   val: Keyword(_s.to_string())
+			       }))
                 } else {
                     return Err(Err::Error((i, ErrorKind::Tag)))
                 }
             },
             // HACK I fucked up and made keywords and symbols
             // just cast everything to a keyword
-            Some(lex::Lex::Symbol(_s)) => {
+            Some(Lex { location: loc, val: Symbol(_s)}) => {
                 if s == _s {
-                    return Ok((&i[1..], lex::Lex::Keyword(_s.to_string())))
+                    return Ok((&i[1..], Lex {
+			location: *loc,
+			val: Keyword(_s.to_string())
+		    }))
                 } else {
                     return Err(Err::Error((i, ErrorKind::Tag)))
                 }
@@ -141,8 +154,7 @@ fn kwd<'a>(tag: &'a str) -> impl Fn(&'a IStream) -> IResult<&'a IStream, lex::Le
     }
 }
 
-fn parlist_w_namelist(i: &IStream) -> IResult<&IStream, ast::Parlist> {
-
+fn parlist_w_namelist<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Parlist> {
     let (i, namelist) = separated_list(
         kwd(","),
         name
@@ -160,7 +172,7 @@ fn parlist_w_namelist(i: &IStream) -> IResult<&IStream, ast::Parlist> {
     ));
 }
 
-fn parlist_wo_namelist(i: &IStream) -> IResult<&IStream, ast::Parlist> {
+fn parlist_wo_namelist<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Parlist> {
     let (i, _) = kwd("...")(i)?;
     return Ok((
         i,
@@ -171,7 +183,7 @@ fn parlist_wo_namelist(i: &IStream) -> IResult<&IStream, ast::Parlist> {
     ));
 }
 
-fn parlist(i: &ISlice) -> IResult<&IStream, ast::Parlist> {
+fn parlist<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Parlist> {
 
     return alt((
         parlist_wo_namelist,
@@ -179,11 +191,11 @@ fn parlist(i: &ISlice) -> IResult<&IStream, ast::Parlist> {
     ))(i);
 }
 
-fn exprlist(i: &IStream) -> IResult<&IStream, ast::Exprlist>{
+fn exprlist<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Exprlist>{
     return separated_list(kwd(","), expr)(i);
 }
 
-fn args(i: &IStream) -> IResult<&IStream, ast::Args> {
+fn args<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Args> {
     return alt((
         map(table_constructor, |t| ast::Args::Table(t)),
         map(literal_string_parser, |s| ast::Args::Literal(s)),
@@ -196,7 +208,7 @@ fn args(i: &IStream) -> IResult<&IStream, ast::Args> {
     ))(i);
 }
 
-fn prefix(i: &IStream) -> IResult<&IStream, ast::Prefix> {
+fn prefix<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Prefix> {
     return alt((
         map(surrounded(kwd("("), expr, kwd(")"),),
              |e| ast::Prefix::ParenedExpr(e)),
@@ -204,7 +216,7 @@ fn prefix(i: &IStream) -> IResult<&IStream, ast::Prefix> {
     ))(i);
 }
 
-fn suffix(i: &IStream) -> IResult<&IStream, ast::Suffix> {
+fn suffix<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Suffix> {
     use ast::Suffix::*;
     return alt((
         map(preceded(kwd("."), name),
@@ -225,7 +237,7 @@ fn suffix(i: &IStream) -> IResult<&IStream, ast::Suffix> {
         )
     ))(i);
 }
-fn prefixexp(i: &IStream) -> IResult<&IStream, ast::Prefixexpr> {
+fn prefixexp<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Prefixexpr> {
     let (i, pref) = prefix(i)?;
     let (i, suffixes) = many0(suffix)(i)?;
     return Ok((i, ast::Prefixexpr {
@@ -235,11 +247,11 @@ fn prefixexp(i: &IStream) -> IResult<&IStream, ast::Prefixexpr> {
 }
 
 
-fn namelist(i: &IStream) -> IResult<&IStream, ast::Namelist> {
+fn namelist<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Namelist> {
     return separated_list(kwd(","), name)(i);
 }
 
-fn var(i: &IStream) -> IResult<&IStream, ast::Var>{
+fn var<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Var>{
 
     // hacky: it's likely that the best thing to do here is 
     // just accept prefixexprs instead of this failure model
@@ -325,14 +337,14 @@ fn var(i: &IStream) -> IResult<&IStream, ast::Var>{
     //     map(name, |n| ast::Var::N(n)),
     // ))(i);
 
-fn varlist(i: &IStream) -> IResult<&IStream, ast::Varlist> {
+fn varlist<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Varlist> {
     return map(
         separated_list(kwd(","), var),
         |l| ast::Varlist {vars: l}
     )(i);
 }
 
-fn funcdecl(i: &IStream) -> IResult<&IStream, ast::Stat> {
+fn funcdecl<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat> {
 
     return map(
         preceded(
@@ -343,7 +355,7 @@ fn funcdecl(i: &IStream) -> IResult<&IStream, ast::Stat> {
     )(i);
 }
 
-fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
+fn stat<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat> {
     return alt((
         map(kwd(";"), |_| ast::Stat::Semicol),
         map(
@@ -452,7 +464,7 @@ fn stat(i: &IStream) -> IResult<&IStream, ast::Stat> {
     ))(i);
 }
 
-fn retstat(i: &IStream) -> IResult<&IStream, ast::Retstat>{
+fn retstat<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Retstat>{
     let (i, m_elist) = surrounded(
         kwd("return"),
         opt(exprlist),
@@ -461,7 +473,7 @@ fn retstat(i: &IStream) -> IResult<&IStream, ast::Retstat>{
     return Ok((i, ast::Retstat { return_expr: m_elist}));
 }
 
-fn block(i: &IStream) -> IResult<&IStream, ast::Block> {
+fn block<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Block> {
     let (i, stats) = many0(stat)(i)?;
     let (i, m_r) = opt(retstat)(i)?;
     Ok((i, ast::Block {
@@ -470,7 +482,7 @@ fn block(i: &IStream) -> IResult<&IStream, ast::Block> {
     }))
 }
 
-fn function_def(i: &IStream) -> IResult<&IStream, ast::Expr> {
+fn function_def<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Expr> {
     let (i, _) = kwd("function")(i)?;
     let (i, f_b) = funcbody(i)?;
     return Ok((
@@ -479,7 +491,7 @@ fn function_def(i: &IStream) -> IResult<&IStream, ast::Expr> {
     ))
 }
 
-fn field(i: &IStream) -> IResult<&IStream, ast::Field> {
+fn field<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Field> {
     // '[' exp ']' '=' exp
     let bracked_field = map(
         pair(
@@ -502,14 +514,14 @@ fn field(i: &IStream) -> IResult<&IStream, ast::Field> {
 
 }
 
-fn fieldlist(i: &IStream) -> IResult<&IStream,  ast::Fieldlist> {
+fn fieldlist<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>,  ast::Fieldlist> {
     let fieldsep = alt((kwd(","), kwd(";")));
     let (i, fields) = separated_list(fieldsep, field)(i)?;
     let (i, _) = opt(alt((kwd(","), kwd(";"))))(i)?;
     return Ok((i, fields));
 }
 
-fn table_constructor(i: &IStream) -> IResult<&IStream, ast::Tableconstructor> {
+fn table_constructor<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Tableconstructor> {
     let (i, _) = kwd("{")(i)?;
     let (i, maybe_fieldlist) = opt(fieldlist)(i)?;
     let (i, _) = kwd("}")(i)?;
@@ -519,7 +531,7 @@ fn table_constructor(i: &IStream) -> IResult<&IStream, ast::Tableconstructor> {
 }
 
 
-fn unary_op(i: &IStream) -> IResult<&IStream, String>{
+fn unary_op<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, String>{
     let (i, result) = alt((
         kwd("#"),
         kwd("-"),
@@ -528,7 +540,7 @@ fn unary_op(i: &IStream) -> IResult<&IStream, String>{
     ))(i)?;
 
     match result {
-        lex::Lex::Keyword(k) => {
+	Lex {val: Keyword(k), .. } => {
             return Ok((i, k));
         },
         _ => {
@@ -538,7 +550,7 @@ fn unary_op(i: &IStream) -> IResult<&IStream, String>{
 }
 
 
-fn binop_right(i: &IStream) -> IResult<&IStream, (ast::BinaryOperator, ast::Expr)> {
+fn binop_right<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, (ast::BinaryOperator, ast::Expr)> {
     let (i, operator) = alt((
         kwd("//"),kwd(">>"),kwd("<<"),kwd(".."),
         kwd("<="),kwd(">="),kwd("=="),kwd("~="),
@@ -548,7 +560,7 @@ fn binop_right(i: &IStream) -> IResult<&IStream, (ast::BinaryOperator, ast::Expr
     ))(i)?;
     let (i, right_expr) = expr(i)?;
     return Ok((i,
-    (operator, right_expr)));
+    (operator.val, right_expr)));
 }
 
 /**

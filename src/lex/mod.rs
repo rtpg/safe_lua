@@ -21,12 +21,16 @@ use nom::{
 
 use std::collections::HashSet;
 
-pub type IStream = [Lex];
-pub type ISlice = [Lex];
+pub type IStream<'a> = [Lex<'a>];
+pub type ISlice<'a> = [Lex<'a>];
 
 mod num;
 mod strings;
 
+
+use nom_locate::LocatedSpan;
+
+pub type LexInput<'a> = LocatedSpan<&'a str>;
 
 /**
 
@@ -41,13 +45,19 @@ Names (also called identifiers) in Lua can be any string of letters,
 
  */
 #[derive(Debug, PartialOrd, PartialEq, Clone)]
-pub enum Lex {
+pub enum LexValue {
     Name(String),
     Keyword(String),
     Symbol(String),
     Str(String),
     Number(String),
     Ignore,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Lex<'a> {
+    pub location: LexInput<'a>,
+    pub val: LexValue
 }
 
 fn _find_name_bound(input: &str) -> Option<usize> {
@@ -104,11 +114,11 @@ fn alphanumeric(input: LexInput) -> IResult<LexInput, char> {
     return one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")(input);
 }
 
-use nom_locate::LocatedSpan;
+use nom_locate::position;
 
-pub type LexInput<'a> = LocatedSpan<&'a str>;
 pub fn parse_name(starting_input: LexInput) -> IResult<LexInput, Lex> {
     let (input, first_char) = alphabetic(starting_input)?;
+    let (input, loc) = position(input)?;
     let (input, rest) = many0(alphanumeric)(input)?;
     let rest_str: String = rest.into_iter().collect();
     let result_name = first_char.to_string() + &rest_str;
@@ -121,7 +131,10 @@ pub fn parse_name(starting_input: LexInput) -> IResult<LexInput, Lex> {
 
     return Ok((
         input,
-        Lex::Name(result_name),
+	Lex {
+	    val: LexValue::Name(result_name),
+	    location: loc 
+	}
     ));
 }
 
@@ -151,16 +164,25 @@ pub fn parse_comment(starting_input: LexInput) -> IResult<LexInput, Lex> {
 	Ok(ls_result) => Ok(ls_result),
 	_ => {
 	    // not a long string, just parse to the end of the line
+	    let (input, loc) = position(input)?;
 	    let (input, comment_body) = many0(none_of("\n"))(input)?;
 	    let comment_body_str = comment_body.into_iter().collect();
-	    Ok((input, Lex::Str(comment_body_str)))
+	    Ok((input,
+		Lex {
+		    val: LexValue::Str(comment_body_str),
+		    location: loc 
+		}))
 	}
     }
 }
 
 pub fn parse_whitespace(input: LexInput) -> IResult<LexInput, Lex> {
     let (rest_of_input, _ws) = many1(one_of(" \t\n\r"))(input)?;
-    return Ok((rest_of_input, Lex::Str(rest_of_input.to_string())))
+    let (rest_of_input, loc) = position(rest_of_input)?;
+    return Ok((rest_of_input, Lex {
+	val: LexValue::Str(rest_of_input.to_string()),
+	location: loc
+    }))
     // match _whitespace_bound(input){
     //     Some(i) => {
     //         let (ws, rest_of_input) = input.split_at(i);

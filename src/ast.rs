@@ -1,7 +1,7 @@
 #[allow(dead_code)]
 
 use lex::{
-    Lex,
+    LexValue
 };
 
 // As usual in extended BNF, {A} means 0 or more As, and [A] means an optional A.
@@ -237,7 +237,7 @@ pub enum Field {
 	// 	 ‘&’ | ‘~’ | ‘|’ | ‘>>’ | ‘<<’ | ‘..’ | 
 	// 	 ‘<’ | ‘<=’ | ‘>’ | ‘>=’ | ‘==’ | ‘~=’ | 
 	// 	 and | or
-pub type BinaryOperator = Lex;
+pub type BinaryOperator = LexValue;
 pub type UnaryOperator = String;
 	// unop ::= ‘-’ | not | ‘#’ | ‘~’
 pub type Name = String;
