@@ -22,7 +22,6 @@ use nom::{
 use std::collections::HashSet;
 
 pub type IStream<'a> = [Lex<'a>];
-pub type ISlice<'a> = [Lex<'a>];
 
 mod num;
 mod strings;
@@ -93,7 +92,7 @@ fn _find_name_bound(input: &str) -> Option<usize> {
 
 
 //     return digit1(input).map(|(res, ds)| 
-//             (res, Lex::Number(ds.to_string()))
+//             (res, LexValue::Number(ds.to_string()))
 //             );
 // }
 
@@ -186,7 +185,7 @@ pub fn parse_whitespace(input: LexInput) -> IResult<LexInput, Lex> {
     // match _whitespace_bound(input){
     //     Some(i) => {
     //         let (ws, rest_of_input) = input.split_at(i);
-    //         return Ok((rest_of_input, Lex::Str(ws.to_string())));
+    //         return Ok((rest_of_input, LexValue::Str(ws.to_string())));
     //     },
     //     None => {
     //         return Err(
@@ -197,28 +196,46 @@ pub fn parse_whitespace(input: LexInput) -> IResult<LexInput, Lex> {
 }
 
 pub fn keyword_parse(i: LexInput) -> IResult<LexInput, Lex> {
-    
-    return map(alt((
+
+    let (i, kwd) = alt((
         alt((tag("and"),tag("break"),tag("do"),tag("elseif"),tag("else"),
     tag("end"),tag("false"),tag("for"),tag("function"),
     tag("goto"),tag("if"))),
         alt((tag("in"),tag("local"),
     tag("nil"),tag("not"),tag("or"),tag("repeat"),
     tag("return"),tag("then"),tag("true"),tag("until"),
-	     tag("while"))))),
-    |kwd: LexInput| return Lex::Keyword(kwd.to_string()))(i);
+	     tag("while")))))(i)?;
+    let (i, loc) = position(i)?;
+    return Ok(
+	(
+	    i,
+	    Lex {
+		val: LexValue::Keyword(kwd.to_string()),
+		location: loc
+	    }
+	)
+    )
 }
 
 pub fn symbol_parse(i: LexInput) -> IResult<LexInput, Lex> {
-    return map(alt((
+    let (i, sym) = alt((
         alt((tag("+"),tag("-"),tag("*"),tag("//"),tag("%"),tag("^"),
     tag("#"),tag("&"),tag("~="),tag("|"),tag("<<"),tag(">>"),tag("/"),
     tag("=="),tag("~"),tag("<="))),
     alt((tag(">="),tag("<"),
     tag(">"),tag("="),tag("("),tag(")"),tag("{"),tag("}"),
     tag("["),tag("]"),tag("::"),tag(";"),tag(":"),tag(","),
-	 tag("..."),tag(".."),tag("."))))),
-	       |sym: LexInput| return Lex::Symbol(sym.to_string()))(i);
+	 tag("..."),tag(".."),tag(".")))))(i)?;
+    let (i, loc) = position(i)?;
+    return Ok(
+	(
+	    i,
+	    Lex {
+		val: LexValue::Symbol(sym.to_string()),
+		location: loc,
+	    }
+	)
+    )
 }
 pub fn lex_all_aux(i: LexInput) -> IResult<LexInput, Vec<Lex>> {
     
@@ -226,9 +243,12 @@ pub fn lex_all_aux(i: LexInput) -> IResult<LexInput, Vec<Lex>> {
     let ignored_content = alt((parse_whitespace, parse_comment));
     // if there's a shebang line, ignore it by parsing it out
     let (i, _) = opt(preceded(tag("#"), many0(none_of("\n"))))(i)?;
-
+    let (i, loc) = position(i)?;
     return many1(alt((
-        map(ignored_content, |_| return Lex::Ignore),
+        map(ignored_content, |_| return Lex {
+	    location: loc,
+	    val: LexValue::Ignore
+	}),
         strings::parse_string,
         num::parse_number,
         parse_name,
@@ -241,7 +261,7 @@ pub fn no_ignored_tokens(i: Vec<Lex>) -> Vec<Lex> {
     let mut return_value: Vec<Lex> = Vec::new();
     for token in i.iter(){
         match token {
-            Lex::Ignore => {},
+            Lex { val: LexValue::Ignore, ..} => {},
             _ => return_value.push(token.clone())
         }
     }
@@ -263,7 +283,24 @@ macro_rules! assert_full_parse {
 	match parse_result {
 	    Ok((remaining_input, result)) => {
 		assert_eq!(remaining_input.fragment(), &"");
-		assert_eq!($expected_result, result);
+		assert_eq!($expected_result, result.val);
+	    },
+	    Err(_) => {
+		dbg!(parse_result).unwrap();
+		panic!("full parse failure");
+	    }
+	}
+    }
+}
+#[macro_export]
+macro_rules! assert_full_parse_vec {
+    ($parser: expr, $input: expr, $expected_result: expr) => {
+	let input_data = LexInput::new($input);
+	let parse_result = $parser(input_data);
+	match parse_result {
+	    Ok((remaining_input, result)) => {
+		assert_eq!(remaining_input.fragment(), &"");
+		assert_eq!($expected_result, result.into_iter().map(|v| v.val).collect::<Vec<LexValue>>());
 	    },
 	    Err(_) => {
 		dbg!(parse_result).unwrap();
@@ -301,7 +338,7 @@ mod tests {
         assert_full_parse!(
             strings::parse_string,
 	    "\"\\n\"",
-            Lex::Str("\n".to_string())
+            LexValue::Str("\n".to_string())
         );
     }
 
@@ -310,71 +347,71 @@ mod tests {
         assert_full_parse!(
             parse_comment,
 	    "-- hi there",
-            Lex::Str(" hi there".to_string())
+            LexValue::Str(" hi there".to_string())
         );
 
-        assert_full_parse!(
+        assert_full_parse_vec!(
             lex_all,
 	    "hi -- hi there",
-            vec![Lex::Name("hi".to_string())]
+            vec![LexValue::Name("hi".to_string())]
 	);
 
-        assert_full_parse!(
+        assert_full_parse_vec!(
             lex_all,
 	    "string.format(a)",
-	    vec![Lex::Name("string".to_string()),
-		Lex::Symbol(".".to_string()),
-		Lex::Name("format".to_string()),
-		Lex::Symbol("(".to_string()),
-		Lex::Name("a".to_string()),
-		Lex::Symbol(")".to_string())]
+	    vec![LexValue::Name("string".to_string()),
+		LexValue::Symbol(".".to_string()),
+		LexValue::Name("format".to_string()),
+		LexValue::Symbol("(".to_string()),
+		LexValue::Name("a".to_string()),
+		LexValue::Symbol(")".to_string())]
         );
 
         assert_full_parse!(
             parse_name,
 	    "_abc",
-            Lex::Name("_abc".to_string())
+            LexValue::Name("_abc".to_string())
         );
         assert_full_parse!(
             parse_name,
 	    "name12",
-            Lex::Name("name12".to_string())
+            LexValue::Name("name12".to_string())
         );
 	
-        assert_full_parse!(
+        assert_full_parse_vec!(
             lex_all,
 	    "name",
-            vec![Lex::Name("name".to_string())]
+            vec![LexValue::Name("name".to_string())]
         );
 
-        assert_full_parse!(
+        assert_full_parse_vec!(
             lex_all,
 	    "name1+n",
-            vec![Lex::Name("name1".to_string()),
-                 Lex::Symbol("+".to_string()),
-                 Lex::Name("n".to_string())]
+            vec![LexValue::Name("name1".to_string()),
+                 LexValue::Symbol("+".to_string()),
+                 LexValue::Name("n".to_string())]
 	);
 
-        assert_full_parse!(
+        assert_full_parse_vec!(
             lex_all,
 	    "name1 name2 name3",
             vec![
-                Lex::Name("name1".to_string()),
-                Lex::Name("name2".to_string()),
-                Lex::Name("name3".to_string())
+                LexValue::Name("name1".to_string()),
+                LexValue::Name("name2".to_string()),
+                LexValue::Name("name3".to_string())
             ]
         );
 
-        assert_full_parse!(
+        assert_full_parse_vec!(
             lex_all,
 	    "name1 name2(name3::name4",
             vec![
-                Lex::Name("name1".to_string()),
-                Lex::Name("name2".to_string()),
-                Lex::Symbol("(".to_string()),
-                Lex::Name("name3".to_string()),
-                Lex::Symbol("::".to_string()),
-                Lex::Name("name4".to_string()),
+                LexValue::Name("name1".to_string()),
+                LexValue::Name("name2".to_string()),
+                LexValue::Symbol("(".to_string()),
+                LexValue::Name("name3".to_string()),
+                LexValue::Symbol("::".to_string()),
+                LexValue::Name("name4".to_string()),
             ]
         );
     }

@@ -9,13 +9,15 @@ use nom::sequence::{
 };
 use nom::bytes::complete::tag;
 use nom::branch::alt;
-use nom::combinator::{ opt, map };
-use super::{Lex, LexInput};
+use nom::combinator::{ opt};
+use super::{Lex, LexInput, LexValue};
+use nom_locate::position;
 
 use super::super::parse::err_str;
 
-fn hex_parse(i: LexInput) -> IResult<LexInput, String> {
+fn hex_parse(i: LexInput) -> IResult<LexInput, Lex> {
     let (i, hex_prefix) = alt((tag("0x"), tag("0X")))(i)?;
+    let (i, loc) = position(i)?;
     let (i, maybe_hex_digits) = opt(hex_digit1)(i)?;
     let (i, maybe_fraction) = opt(
         preceded(
@@ -77,21 +79,23 @@ fn hex_parse(i: LexInput) -> IResult<LexInput, String> {
         }
     };
 
-    return Ok((i, result));
+    return Ok((i,
+	       Lex {
+		   location: loc,
+		   val: LexValue::Number(result)
+	       }));
 }
 
 pub fn parse_number(i: LexInput) -> IResult<LexInput, Lex>{
     return alt((
-        map(
-            hex_parse,
-            |s| Lex::Number(s)
-        ),
+        hex_parse,
         parse_nonhex_number,
     ))(i);
 }
 
 fn parse_nonhex_number(input: LexInput) -> IResult<LexInput, Lex> {
     let (i, maybe_whole_part) = opt(digit1)(input)?;
+    let (i, loc) = position(i)?;
     let (i, maybe_fraction) = opt(
         preceded(
             tag("."),
@@ -160,7 +164,10 @@ fn parse_nonhex_number(input: LexInput) -> IResult<LexInput, Lex> {
         }
     }
 
-    return Ok((i, Lex::Number(result)));
+    return Ok((i, Lex {
+	location: loc,
+	val: LexValue::Number(result)
+    }));
 }
 
 #[cfg(test)]
@@ -171,7 +178,7 @@ mod tests {
 	assert_full_parse!(
 	    parse_number,
 	    i,
-	    Lex::Number(i.to_string())
+	    LexValue::Number(i.to_string())
 	);
     }
     #[test]

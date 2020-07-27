@@ -18,6 +18,7 @@ pub fn short_string(input: LexInput) -> IResult<LexInput, Lex>{
         char_parse('"'),
     ))(input)?;
 
+    let (input, loc) = position(input)?;
     // start parsing all the content
     
     let no_quotes: &str = &(start_quote.to_string() + "\\");
@@ -41,7 +42,9 @@ pub fn short_string(input: LexInput) -> IResult<LexInput, Lex>{
 
     let (input, _) = char_parse(start_quote)(input)?;
 
-    return Ok((input, Lex::Str(string_contents.iter().collect())));
+    return Ok((input, Lex { location: loc,
+			    val: LexValue::Str(string_contents.iter().collect())
+    }));
 }
 
 
@@ -55,6 +58,7 @@ pub fn long_string(input: LexInput) -> IResult<LexInput, Lex> {
         tag("[")
     )(input)?;
 
+    let (input, loc) = position(input)?;
     let mut cl_bkt = "]".to_owned();
     let eq: String = equals_level.into_iter().collect();
     cl_bkt.push_str(&eq);
@@ -66,7 +70,10 @@ pub fn long_string(input: LexInput) -> IResult<LexInput, Lex> {
         closing_bracket,
     )(input)?;
 
-    return Ok((input, Lex::Str(string_contents.into_iter().collect())));
+    return Ok((input, Lex {
+	location: loc,
+	val: LexValue::Str(string_contents.into_iter().collect())
+    }));
 }
 
 pub fn parse_string(input: LexInput) -> IResult<LexInput, Lex> {

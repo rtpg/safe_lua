@@ -452,7 +452,7 @@ pub fn push_expr(expr: &ast::Expr, code: &mut impl Code){
             push_expr(left, code);
             push_expr(right, code);
             // this should panic
-            if let lex::Lex::Keyword(raw_op) = op {
+            if let lex::LexValue::Keyword(raw_op) = op {
                 code.emit(BC::BINOP(raw_op.to_string()));
             } else {
                 panic!("Invalid binary operator");

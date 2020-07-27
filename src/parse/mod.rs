@@ -84,7 +84,7 @@ pub fn err_str<T>(i: LexInput) -> IResult<LexInput, T> {
 fn num_parser<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Expr> {
     match i.get(0) {
         Some(Lex {
-	    location: loc,
+	    location: _loc,
 	    val: Number(n)
 	}) => return Ok((
             &i[1..], ast::Expr::Numeral(n.to_string())
@@ -95,7 +95,7 @@ fn num_parser<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Expr> {
 
 fn literal_string_parser<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, String> {
     match i.get(0) {
-        Some(Lex {location: loc, val: Str(n)}) => return Ok((
+        Some(Lex {location: _loc, val: Str(n)}) => return Ok((
             &i[1..], n.to_string()
         )),
         _ => return Err(
@@ -109,7 +109,7 @@ use lex::LexValue::*;
 
 fn name<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, String> {
     match i.get(0) {
-        Some(Lex {location: loc, val: Name(n)}) => return Ok((
+        Some(Lex {location: _loc, val: Name(n)}) => return Ok((
             &i[1..], n.to_string()
         )),
         _ => return Err(
@@ -1020,13 +1020,15 @@ local x = 3;
     #[test]
     fn test_kwd_parse(){
         let lexed = lex_all(LexInput::new(",")).unwrap().1;
-        assert_eq!(
-            kwd(",")(&lexed),
-            Ok((
-                vec![].as_ref(),
-                lex::Lex::Keyword(",".to_string())
-            ))
-        );
+
+	match kwd(",")(&lexed){
+	    Ok(([],
+		Lex {val: v, ..}
+	    )) => {
+		assert_eq!(v, lex::LexValue::Keyword(",".to_string()))
+	    },
+	    _ => panic!("Parsing failed")
+	};
     }
 
 
