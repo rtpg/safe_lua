@@ -49,6 +49,12 @@ pub enum LV {
     LuaFalse,
 }
 
+#[derive(Debug)]
+pub struct LuaExc<'a> {
+    // a Lua Exception
+    pub msg: &'a str 
+}
+
 fn lv_fmt(lv: &LV, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     use self::LV::*;
     match lv {
@@ -106,27 +112,27 @@ pub struct LuaEnv{
     values: HashMap<String, LV>
 }
 
-pub struct LuaFrame{
+pub struct LuaFrame<'a>{
     // This is a single frame, that includes the environment etc
     // calling into another function will build a frame that will
     // execute whatever needs to be executed
-    code: Rc<CodeObj>, // the code itself
+    code: Rc<CodeObj<'a>>, // the code itself
     pc: usize, // program counter
     stack: LuaValueStack, // value stack
     env: LuaEnv 
 }
 
 #[allow(dead_code)]
-pub struct LuaRunState {
+pub struct LuaRunState<'a> {
     /*
     * store the current state of a program 
     */
     file_path: String,
-    compiled_code: Rc<CodeObj>,
+    compiled_code: Rc<CodeObj<'a>>,
     // frame we are executing on
-    current_frame: LuaFrame,
+    current_frame: LuaFrame<'a>,
     // stack of frames (doesn't include existing frame)
-    frame_stack: Vec<LuaFrame>,
+    frame_stack: Vec<LuaFrame<'a>>,
     pub packages: HashMap<String, LV>,
 }
 

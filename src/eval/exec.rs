@@ -18,6 +18,16 @@ fn print_and_push(stack: &mut LuaValueStack, val: LV) {
     stack.values.push(val);
 }
 
+macro_rules! vm_panic {
+    ($s: expr, $err: expr) => {
+	println!("Lua VM crashed at");
+	dbg!($s.current_frame.code.sourcemap.get_location($s.current_frame.pc));
+	println!("With:");
+	dbg!($err);
+	panic!("VM CRASH");
+    }
+}
+
 pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> ExecResult {
     // Move the machine forward until we hit the next yield
     macro_rules! pop {
@@ -36,7 +46,7 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 	print_and_push(&mut s.current_frame.stack, v);
     }
     
-    fn peek(s: &LuaRunState) -> &LV {
+    fn peek<'a>(s: &'a LuaRunState<'_>) -> &'a LV {
 	let len = s.current_frame.stack.values.len() - 1;
 	match &s.current_frame.stack.values.get(len) {
 	    Some(v) => v, // TODO noclone
@@ -134,7 +144,16 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
                 let l = pop!();
 		let result = match binop.as_ref() {
 		    "==" => lua_binop_eq(&l, &r),
-		    "^" => lua_exponent_eq(&l, &r),
+		    "^" => {
+			match lua_exponent_eq(&l, &r){
+			    Ok(v) => v,
+			    Err(err) => {
+				// get the location
+				
+				vm_panic!(s, err);
+			    }
+			}
+		    },
 		    _ => {
 			dbg!(binop);
 			panic!("Unknown binop");

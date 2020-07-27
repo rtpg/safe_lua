@@ -1,9 +1,14 @@
 #[allow(dead_code)]
 
+use nom_locate::LocatedSpan;
 use lex::{
     LexValue
 };
 
+pub struct Node<'a, T> {
+    pub v: T,
+    pub loc: LocatedSpan<&'a str>
+}
 // As usual in extended BNF, {A} means 0 or more As, and [A] means an optional A.
 	// chunk ::= block
 #[derive(Debug, Clone, PartialEq)]

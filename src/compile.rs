@@ -3,6 +3,7 @@
  * a bunch of lex tokens into a list of bytecode
  * operations
  */
+use nom_locate::LocatedSpan;
 use ast;
 use lex;
 use std::collections::HashMap;
@@ -105,15 +106,46 @@ pub enum BC {
     PANIC(String),
 }
 
+#[derive(Debug)]
+pub struct Sourcemap<'a> {
+    // this struct stores sourcemap information "nicely" (at least in theory)
+    // later: make this more performant/space friendly
+    map_data: Vec<LocatedSpan<&'a str>>
+}
+
+impl<'a> Sourcemap<'a> {
+    pub fn new() -> Sourcemap<'a>{
+	return Sourcemap {
+	    map_data: vec![]
+	}
+    }
+    pub fn write_map(&mut self, bytecode_position: usize, location: LocatedSpan<&'a str>){
+	// write the mapping for the bytecode position
+	if self.map_data.len() < bytecode_position - 1 {
+	    self.map_data.resize(
+		bytecode_position,
+		LocatedSpan::new("unknown location")
+	    );
+	}
+	self.map_data[bytecode_position-1] = location
+    }
+
+    pub fn get_location(&self, _bytecode_position: usize) -> LocatedSpan<&str> {
+	// take the bytecode position and get
+	panic!("Not implemented");
+    }
+}
 // code objects
 // they can include references to other code objects
 #[derive(Debug)]
-pub struct CodeObj {
+pub struct CodeObj<'a> {
     // the actual commands to run when we want to run this code block
     pub bytecode: Vec<BC>,
+    // the mapping from bytecode to code location
+    pub sourcemap: Sourcemap<'a>,
     // references to other code blocks
     // (for example code blocks for funciton definitions)
-    inner_code: Vec<CodeObj>,
+    inner_code: Vec<CodeObj<'a>>,
     // positions in the bytecode for jump labels
     labels: HashMap<String, usize>,
     // jump targets, used for looping etc
@@ -122,7 +154,7 @@ pub struct CodeObj {
 }
 
 
-pub trait Code {
+pub trait Code<'a> {
     // emit bytecode
     // return 
     fn emit(&mut self, elt: BC);
@@ -130,7 +162,7 @@ pub trait Code {
     // emit a noop and provide a jump target for later
     fn emit_jump_location(&mut self) -> JumpTarget;
     // save an inner code object, and return its index
-    fn write_inner_code(&mut self, CodeObj) -> usize;
+    fn write_inner_code(&mut self, CodeObj<'a>) -> usize;
     // add a label
     fn add_label(&mut self, String);
     // prep a forward jump
@@ -141,7 +173,7 @@ pub trait Code {
     fn emit_fwd_jump_location(&mut self, JumpTarget);
 }
 
-impl Code for CodeObj {
+impl<'a> Code<'a> for CodeObj<'a> {
     fn emit(&mut self, elt: BC){
         self.bytecode.push(elt);
     }
@@ -171,7 +203,7 @@ impl Code for CodeObj {
             }
         }
     }
-    fn write_inner_code(&mut self, code: CodeObj) -> usize {
+    fn write_inner_code(&mut self, code: CodeObj<'a>) -> usize {
         // TODO is this safe?
         self.inner_code.push(code);
         // TODO not sure if this is the right thing to return either
@@ -187,15 +219,17 @@ impl Code for CodeObj {
 }
 
 
-pub fn compile_stat(stat: &ast::Stat, code: &mut impl Code){
+pub fn compile_stat<'a>(stat: ast::Stat, code: &mut impl Code<'a>){
     use ast::Stat::*;
 
     match stat {
         Semicol => {},
         RawExpr(e) => {
             // we'll push the value, then pop it
-            push_expr(e, code);
-            code.emit(BC::POP);
+	    {
+		push_expr(e, code);
+		code.emit(BC::POP);
+	    }
         },
         Label(name) => {
             code.add_label(name.to_string());
@@ -268,11 +302,11 @@ pub fn compile_stat(stat: &ast::Stat, code: &mut impl Code){
             // once we have the exprlist on the top of the stack
             // we'll try to assign to each variable
             let varlist_len = varlist.vars.len();
-            for i in 0..varlist_len {
+            for (i, var) in (0..varlist_len).zip(varlist.vars.into_iter()) {
                 // first we extract out the value to assign...
                 code.emit(BC::EXTRACT_FROM_EXPRLIST(i));
                 // then we do the assignment
-                push_var_assignment(&varlist.vars[i], code);
+                push_var_assignment(var, code);
             }
         },
         If {predicate, then_block, elif_list, else_block} => {
@@ -384,7 +418,7 @@ pub fn compile_stat(stat: &ast::Stat, code: &mut impl Code){
     }
 }
 
-pub fn push_var_assignment(var: &ast::Var, code: &mut impl Code){
+pub fn push_var_assignment<'a>(var: ast::Var, code: &mut impl Code<'a>){
     use super::ast::Var::*;
     match var {
 	N(name) => {
@@ -403,7 +437,7 @@ pub fn push_var_assignment(var: &ast::Var, code: &mut impl Code){
     }
 }
 
-pub fn push_numeral(n: &String, code: &mut impl Code){
+pub fn push_numeral<'a>(n: &String, code: &mut impl Code<'a>){
 
     // we will parse out the value
     if n.starts_with("0x") {
@@ -432,7 +466,7 @@ pub fn push_numeral(n: &String, code: &mut impl Code){
 	}
     }
 }
-pub fn push_expr(expr: &ast::Expr, code: &mut impl Code){
+pub fn push_expr<'a>(expr: ast::Expr, code: &mut impl Code<'a>){
     use ast::Expr::*;
 
     match expr {
@@ -449,8 +483,8 @@ pub fn push_expr(expr: &ast::Expr, code: &mut impl Code){
         BinOp(left, op, right) => {
             // here we need to push the left and right expressions
             // then evaluate the operator
-            push_expr(left, code);
-            push_expr(right, code);
+            push_expr(*left, code);
+            push_expr(*right, code);
             // this should panic
             if let lex::LexValue::Keyword(raw_op) = op {
                 code.emit(BC::BINOP(raw_op.to_string()));
@@ -460,11 +494,11 @@ pub fn push_expr(expr: &ast::Expr, code: &mut impl Code){
         },
         UnOp(op, left) => {
             // here just have to process one operator
-            push_expr(left, code);
+            push_expr(*left, code);
             code.emit(BC::UNOP(op.to_string()));
         },
         Pref(prefixed_expr) => {
-            push_prefixexpr(prefixed_expr, code);
+            push_prefixexpr(*prefixed_expr, code);
         },
         Tbl(ctr) => {
             push_table(ctr, code);
@@ -475,22 +509,23 @@ pub fn push_expr(expr: &ast::Expr, code: &mut impl Code){
     }
 }
 
-pub fn new_code_obj() -> CodeObj {
+pub fn new_code_obj<'a>() -> CodeObj<'a>{
     return CodeObj {
         bytecode: Vec::new(),
+	sourcemap: Sourcemap::new(),
         inner_code: Vec::new(),
         labels: HashMap::new(),
         jump_target: Vec::new(),
     }
 }
 
-pub fn push_func(body: &ast::Funcbody, code: &mut impl Code){
+pub fn push_func<'a>(body: ast::Funcbody, code: &mut impl Code<'a>){
     // take a function body and register the op codes to push it to the stack
     // we'll need to build up a code object for this body to represent in the
     // bytecode as well
     let mut inner_code = new_code_obj();
     // this inner code object will hold our body 
-    compile_block(&body.body, &mut inner_code);
+    compile_block(body.body, &mut inner_code);
 
     let code_index = code.write_inner_code(inner_code);
     code.emit(BC::PUSH_CODE_INDEX(code_index));
@@ -500,7 +535,7 @@ pub fn push_func(body: &ast::Funcbody, code: &mut impl Code){
     code.emit(BC::BUILD_FUNCTION);
 }
 
-pub fn push_parlist(maybe_parlist: &Option<ast::Parlist>, code: &mut impl Code){
+pub fn push_parlist<'a>(maybe_parlist: &Option<ast::Parlist>, code: &mut impl Code<'a>){
     match maybe_parlist {
         None => code.emit(BC::PUSH_NIL),
         Some(parlist) => {
@@ -513,7 +548,7 @@ pub fn push_parlist(maybe_parlist: &Option<ast::Parlist>, code: &mut impl Code){
         }
     }
 }
-pub fn push_table(ctr: &ast::Tableconstructor, code: &mut impl Code){
+pub fn push_table<'a>(ctr: std::option::Option<std::vec::Vec<ast::Field>>, code: &mut impl Code<'a>){
     use ast::Field::*;
 
     // push a table based on its constructor
@@ -559,23 +594,23 @@ pub fn push_table(ctr: &ast::Tableconstructor, code: &mut impl Code){
     }
 }
 
-pub fn push_prefixexpr(pexpr: &ast::Prefixexpr, code: &mut impl Code){
+pub fn push_prefixexpr<'a>(pexpr: ast::Prefixexpr, code: &mut impl Code<'a>){
     use ast::Prefix::*;
     use ast::Suffix::*;
 
-    match &pexpr.prefix {
-        ParenedExpr(e) => push_expr(&e, code),
+    match pexpr.prefix {
+        ParenedExpr(e) => push_expr(e, code),
         Varname(n) => push_variable(
-            &ast::Var::N(n.to_string()), code)
+            ast::Var::N(n.to_string()), code)
     }
 
-    for suffix in &pexpr.suffixes { 
+    for suffix in pexpr.suffixes { 
         match suffix {
             ArrAccess(expr) => {
                 // a[b]
                 // a is already on the stack
                 // push b
-                push_expr(&expr, code);
+                push_expr(expr, code);
                 code.emit(BC::ARRAY_ACCESS);
             },
             DotAccess(name) => {
@@ -596,7 +631,7 @@ pub fn push_prefixexpr(pexpr: &ast::Prefixexpr, code: &mut impl Code){
                 }
 
                 // also push the arguments on the stack
-                push_args(&_args, code);
+                push_args(_args, code);
 
                 match _name {
                     Some(_n) => {
@@ -611,7 +646,7 @@ pub fn push_prefixexpr(pexpr: &ast::Prefixexpr, code: &mut impl Code){
     }
 }
 
-pub fn push_variable(v: &ast::Var, code: &mut impl Code){
+pub fn push_variable<'a>(v: ast::Var, code: &mut impl Code<'a>){
     use ast::Var::*;
 
     match v {
@@ -640,7 +675,7 @@ pub fn push_variable(v: &ast::Var, code: &mut impl Code){
     }
 }
 
-pub fn push_exprlist(exprs: &Vec<ast::Expr>, code: &mut impl Code){
+pub fn push_exprlist<'a>(exprs: std::vec::Vec<ast::Expr>, code: &mut impl Code<'a>){
     // take a list of expressions, and build the list from the values
     // being in the stack
     // [] -> [list_of_expressions]
@@ -652,7 +687,7 @@ pub fn push_exprlist(exprs: &Vec<ast::Expr>, code: &mut impl Code){
 }
 
 
-pub fn push_args(args: &ast::Args, code: &mut impl Code){
+pub fn push_args<'a>(args: ast::Args, code: &mut impl Code<'a>){
     // build up the argument list for passing to a function
     // at the end we should have on top of the stack one list element
     // holding our arguments
@@ -711,18 +746,22 @@ pub fn push_args(args: &ast::Args, code: &mut impl Code){
 //         }
 //     }
 // }
-pub fn compile_block(b: &ast::Block, code: &mut impl Code) {
-    for stat in &b.stats {
-        compile_stat(&stat, code);
+pub fn compile_block<'a>(b: ast::Block, code: &mut impl Code<'a>) {
+
+    let stats = b.stats;
+    let retstat = b.retstat;
+    for stat in stats {
+        compile_stat(stat, code);
     }
 
-    match &b.retstat {
+    match retstat {
         None => {},
         Some(retstat) => {
-            match &retstat.return_expr {
+            match retstat.return_expr {
                 None => code.emit(BC::RETURN_NONE),
                 Some(exprlist) => {
-                    if exprlist.len() == 0 {
+		    let l = exprlist.len();
+                    if l == 0 {
                         // here we're also in a return none case
                         code.emit(BC::RETURN_NONE);
                     } else {
@@ -732,8 +771,8 @@ pub fn compile_block(b: &ast::Block, code: &mut impl Code) {
                         
                         // this pushes exprlist.len() elements to stack
                         let exprlist_len = exprlist.len();
-                        for expr in exprlist {
-                            push_expr(&expr, code);
+                        for expr in exprlist.into_iter() {
+                            push_expr(expr, code);
                         }
                         // this pops exprlist.len() elements to the stack
                         // then adds one
@@ -748,8 +787,8 @@ pub fn compile_block(b: &ast::Block, code: &mut impl Code) {
         }
     }
 }
-pub fn compile(parsed_block: ast::Block) -> CodeObj {
+pub fn compile<'a>(parsed_block: ast::Block) -> CodeObj<'a> {
     let mut code = new_code_obj();
-    compile_block(&parsed_block, &mut code);
+    compile_block(parsed_block, &mut code);
     return code;
 }

@@ -1,3 +1,4 @@
+use eval::LuaExc;
 use eval::LV;
 use eval::LV::*;
 
@@ -30,18 +31,26 @@ pub fn lua_binop_eq_impl(l: &LV, r: &LV) -> bool {
     }
 }
 
-pub fn lua_exponent_eq(l: &LV, r: &LV) -> LV {
+pub fn lua_exponent_eq<'a>(l: &LV, r: &LV) -> Result<LV, LuaExc<'a>> {
     match l {
 	Num(ll) => {
 	    match r {
-		Num(rr) => Num(ll.powf(*rr)),
+		Num(rr) => Ok(Num(ll.powf(*rr))),
 		_ => {
-		    panic!("Type mismatch on exponent")
+		    Err(
+			LuaExc {
+			    msg: "Type mismatch on exponent"
+			}
+		    )
 		}
 	    }
 	},
 	_ => {
-	    panic!("Type mismatch on exponent")
+	    Err(
+		LuaExc {
+		    msg: "Type mismatch on exponent"
+		}
+	    )
 	}
     }
 }
