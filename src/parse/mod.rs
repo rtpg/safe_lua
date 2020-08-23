@@ -6,6 +6,7 @@ pub mod utils;
 mod func;
 mod expr;
 
+use nom_locate::LocatedSpan;
 use parse::expr::expr;
 
 use parse::utils::surrounded;
@@ -107,10 +108,16 @@ fn literal_string_parser<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, Str
 use lex::Lex;
 use lex::LexValue::*;
 
+
 fn name<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, String> {
+    let (i, v) = name_with_loc(i)?;
+    return Ok((i, v.0))
+}
+
+fn name_with_loc<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, (String, LocatedSpan<&'a str>)> {
     match i.get(0) {
-        Some(Lex {location: _loc, val: Name(n)}) => return Ok((
-            &i[1..], n.to_string()
+        Some(Lex {location: loc, val: Name(n)}) => return Ok((
+            &i[1..], (n.to_string(), *loc)
         )),
         _ => return Err(
                 Err::Error((i, ErrorKind::Alpha))
@@ -351,16 +358,25 @@ fn funcdecl<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat> {
             kwd("function"),
             pair(funcname, funcbody),
         ),
-        |(n, b)| ast::Stat::FuncDecl(n, b)
+        |(n, b)| ast::Stat {
+	    v: ast::StatV::FuncDecl(n, b),
+	    loc: n.loc
+	}
     )(i);
 }
 
 fn stat<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat> {
     return alt((
-        map(kwd(";"), |_| ast::Stat::Semicol),
+        map(kwd(";"), |k| ast::Stat {
+	    v: ast::StatV::Semicol,
+	    loc: k.location
+	}),
         map(
             separated_pair(varlist, kwd("="), exprlist),
-            |(varlist, explist)| ast::Stat::Eql(varlist, explist)
+            |(varlist, explist)| ast::Stat {
+		v: ast::StatV::Eql(varlist, explist),
+		loc: varlist.loc() 
+	    }
         ),
         // FFFFFFFFFFFFFFF
         // prefix expressions capture function calls

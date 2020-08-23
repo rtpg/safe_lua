@@ -17,6 +17,7 @@ pub enum JumpTarget {
     JumpTable(usize),
 }
 
+
 // bytecode commands
 #[allow(non_camel_case_types, dead_code)]
 #[derive(Debug, Clone)]
@@ -162,7 +163,7 @@ pub struct CodeObj<'a> {
 pub trait Code<'a> {
     // emit bytecode
     // return 
-    fn emit(&mut self, elt: BC, location: LocatedSpan<&'a str>);
+    fn emit(&mut self, elt: BC, location: Option<LocatedSpan<&'a str>>);
 
     // emit a noop and provide a jump target for later
     fn emit_jump_location(&mut self) -> JumpTarget;
@@ -231,9 +232,9 @@ impl<'a> Code<'a> for CodeObj<'a> {
 
 
 pub fn compile_stat<'a>(stat: ast::Stat, code: &mut impl Code<'a>){
-    use ast::Stat::*;
+    use ast::StatV::*;
 
-    match stat {
+    match stat.v {
         Semicol => {},
         RawExpr(e) => {
             // we'll push the value, then pop it

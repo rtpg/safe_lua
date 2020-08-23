@@ -1,14 +1,17 @@
+use nom_locate::position;
 use super::*;
 
 pub fn funcname<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Funcname> {
-    
+
     let (i, f_n) = name(i)?;
+    let (i, loc) = position(i)?;
     let (i, o_n_c) = many0(preceded(kwd("."), name))(i)?;
     let (i, m_m_c) = opt(preceded(kwd(":"), name))(i)?;
     return Ok((i, ast::Funcname {
         first_name_component: f_n,
         other_name_components: o_n_c,
         method_component: m_m_c,
+	loc: loc
     }));
 }
 
