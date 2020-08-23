@@ -122,17 +122,22 @@ impl<'a> Sourcemap<'a> {
     pub fn write_map(&mut self, bytecode_position: usize, location: LocatedSpan<&'a str>){
 	// write the mapping for the bytecode position
 	if self.map_data.len() < bytecode_position - 1 {
+	    // copy the last known location N times
+	    let default_location = match self.map_data.len() {
+		0 => LocatedSpan::new("unknown location"),
+		_ => self.map_data[self.map_data.len()-1]
+	    };
 	    self.map_data.resize(
 		bytecode_position,
-		LocatedSpan::new("unknown location")
+		default_location,
 	    );
 	}
 	self.map_data[bytecode_position-1] = location
     }
 
-    pub fn get_location(&self, _bytecode_position: usize) -> LocatedSpan<&str> {
+    pub fn get_location(&self, bytecode_position: usize) -> LocatedSpan<&str> {
 	// take the bytecode position and get
-	panic!("Not implemented");
+	return self.map_data[bytecode_position];
     }
 }
 // code objects
@@ -157,7 +162,7 @@ pub struct CodeObj<'a> {
 pub trait Code<'a> {
     // emit bytecode
     // return 
-    fn emit(&mut self, elt: BC);
+    fn emit(&mut self, elt: BC, location: LocatedSpan<&'a str>);
 
     // emit a noop and provide a jump target for later
     fn emit_jump_location(&mut self) -> JumpTarget;
@@ -174,12 +179,18 @@ pub trait Code<'a> {
 }
 
 impl<'a> Code<'a> for CodeObj<'a> {
-    fn emit(&mut self, elt: BC){
+    fn emit(&mut self, elt: BC, location: Option<LocatedSpan<&'a str>>){
         self.bytecode.push(elt);
+	if let Some(loc) = location {
+	    self.sourcemap.write_map(
+		self.bytecode.len() - 1,
+		loc
+	    );
+	}
     }
 
     fn emit_jump_location(&mut self) -> JumpTarget {
-        self.emit(BC::NOOP);
+        self.emit(BC::NOOP, None);
         let loc = self.bytecode.len() - 1;
         return JumpTarget::CodeLoc(loc);
     }
@@ -197,7 +208,7 @@ impl<'a> Code<'a> for CodeObj<'a> {
             },
             JumpTarget::JumpTable(i) => {
                 // here we need to register the location in our jump table
-                self.emit(BC::NOOP);
+                self.emit(BC::NOOP, None);
                 let loc = self.bytecode.len() - 1;
                 self.jump_target[i] = Some(loc);
             }
@@ -212,7 +223,7 @@ impl<'a> Code<'a> for CodeObj<'a> {
 
     fn add_label(&mut self, name: String) {
         // we'll add a noop command here to avoid any issues
-        self.emit(BC::NOOP);
+        self.emit(BC::NOOP, None);
         let jmp_position = self.bytecode.len() - 1;
         self.labels.insert(name, jmp_position);
     }
