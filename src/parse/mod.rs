@@ -6,6 +6,7 @@ pub mod utils;
 mod func;
 mod expr;
 
+use nom::sequence::terminated;
 use nom_locate::LocatedSpan;
 use parse::expr::expr;
 
@@ -34,6 +35,7 @@ use parse::nom::sequence::{
 };
 use parse::nom::multi::many0;
 use ast;
+use ast::HasLoc;
 use lex::IStream;
 use lex::LexInput;
 
@@ -85,19 +87,19 @@ pub fn err_str<T>(i: LexInput) -> IResult<LexInput, T> {
 fn num_parser<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Expr> {
     match i.get(0) {
         Some(Lex {
-	    location: _loc,
+	    location: loc,
 	    val: Number(n)
 	}) => return Ok((
-            &i[1..], ast::Expr::Numeral(n.to_string())
+            &i[1..], ast::Expr::Numeral(n.to_string(), *loc)
         )),
         _ => return err(i)
     }
 }
 
-fn literal_string_parser<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, String> {
+fn literal_string_parser<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, (String, LocatedSpan<&'a str>)> {
     match i.get(0) {
-        Some(Lex {location: _loc, val: Str(n)}) => return Ok((
-            &i[1..], n.to_string()
+        Some(Lex {location: loc, val: Str(n)}) => return Ok((
+            &i[1..], (n.to_string(), *loc)
         )),
         _ => return Err(
                 Err::Error((i, ErrorKind::Alpha))
@@ -204,8 +206,8 @@ fn exprlist<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Exprlist>{
 
 fn args<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Args> {
     return alt((
-        map(table_constructor, |t| ast::Args::Table(t)),
-        map(literal_string_parser, |s| ast::Args::Literal(s)),
+        map(table_constructor, |(t, _)| ast::Args::Table(t)),
+        map(literal_string_parser, |(s, _)| ast::Args::Literal(s)),
         map(
             surrounded(
                 kwd("("), opt(exprlist), kwd(")")
@@ -219,7 +221,7 @@ fn prefix<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Prefix> {
     return alt((
         map(surrounded(kwd("("), expr, kwd(")"),),
              |e| ast::Prefix::ParenedExpr(e)),
-        map(name, |n| ast::Prefix::Varname(n)),
+        map(name_with_loc, |(n, loc)| ast::Prefix::Varname(n, loc)),
     ))(i);
 }
 
@@ -264,15 +266,14 @@ fn var<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Var>{
     // just accept prefixexprs instead of this failure model
 
     let (i, expression) = prefixexp(i)?;
-
     // let's check that this finishes in the right way
     match expression.suffixes.len() {
         0 => {
             match expression.prefix {
                 // if there are no suffixes we're working just on a prefix
-                ast::Prefix::Varname(name) => {
+                ast::Prefix::Varname(name, location) => {
                     return Ok((
-                        i, ast::Var::N(name)
+                        i, ast::Var::N(name, location)
                     ))
                 },
                 // if it's a paren, that's not valid and we fail
@@ -375,7 +376,7 @@ fn stat<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat> {
             separated_pair(varlist, kwd("="), exprlist),
             |(varlist, explist)| ast::Stat {
 		v: ast::StatV::Eql(varlist, explist),
-		loc: varlist.loc() 
+		loc: HasLoc::loc(&varlist) 
 	    }
         ),
         // FFFFFFFFFFFFFFF
@@ -383,19 +384,19 @@ fn stat<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat> {
         // this is more open than lua's normal syntax
         map(
             expr,
-            |e| ast::Stat::RawExpr(e),
+            |e| ast::Stat {v: ast::StatV::RawExpr(e), loc: e.loc() }
         ),
         map(
-            surrounded(kwd("::"), name, kwd("::")),
-            |name| ast::Stat::Label(name),
+            surrounded(kwd("::"), name_with_loc, kwd("::")),
+            |(name, loc)| ast::Stat {v: ast::StatV::Label(name), loc: loc }
         ),
         map(
             kwd("break"),
-            |_| ast::Stat::Break,
+            |b| ast::Stat {v: ast::StatV::Break, loc: b.location }
         ),
         map(
-            preceded(kwd("goto"), name),
-            |n| ast::Stat::Goto(n),
+            preceded(kwd("goto"), name_with_loc),
+            |(n, l)| ast::Stat {v: ast::StatV::Goto(n), loc: l }
         ),
         map(
             pair(
@@ -404,7 +405,7 @@ fn stat<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat> {
                 ),
                 expr,
             ),
-            |(b, e)| ast::Stat::Repeat(b, e)
+            |(b, e)| ast::Stat {v: ast::StatV::Repeat(b, e), loc: b.loc() }
         ),
         map(
             surrounded(
@@ -412,14 +413,14 @@ fn stat<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat> {
                 block,
                 kwd("end")
             ),
-            |b| ast::Stat::Do(b),
+            |b| ast::Stat {v: ast::StatV::Do(b), loc: b.loc()}
         ),
         map(
             pair(
                 preceded(kwd("while"), expr),
                 surrounded(kwd("do"), block, kwd("end"))
             ),
-            |(e, b)| ast::Stat::While(e, b),
+            |(e, b)| ast::Stat { v: ast::StatV::While(e, b), loc: e.loc() }
         ),
         funcdecl,
         map(
@@ -435,47 +436,58 @@ fn stat<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat> {
                 opt(preceded(kwd("else"), block)),
                 kwd("end"),
             )),
-            |(p, t, ei_l, e_b, _)| ast::Stat::If {
+            |(p, t, ei_l, e_b, _)| ast::Stat {v: ast::StatV::If {
                 predicate: p,
                 then_block: t,
                 elif_list: ei_l,
                 else_block: e_b,
-            }
+            }, loc: p.loc() }
         ),
         map(
             tuple((
-                surrounded(kwd("for"), name, kwd("=")),
+                surrounded(kwd("for"), name_with_loc, kwd("=")),
                 separated_pair(expr, kwd(","), expr),
                 opt(
                     preceded(kwd(","), expr)
                 ),
                 surrounded(kwd("do"), block, kwd("end"))
             )),
-            |(n, (e1, e2), m_e3, b)| ast::Stat::For(n, e1, e2, m_e3, b)
+            |((n, loc), (e1, e2), m_e3, b)| ast::Stat {
+		v: ast::StatV::For(n, e1, e2, m_e3, b),
+		loc: loc }
         ),
         map(
             tuple((
-                surrounded(kwd("for"), namelist, kwd("in")),
+                pair(kwd("for"), terminated(namelist, kwd("in"))),
                 exprlist,
                 surrounded(kwd("do"), block, kwd("end")),
             )),
-            |(n, el, b)| ast::Stat::ForIn(n, el, b)
+            |((k, n), el, b)| ast::Stat {
+		v: ast::StatV::ForIn(n, el, b),
+		loc: k.location
+	    }
         ),
         map(
             preceded(
                 pair(kwd("local"), kwd("function")),
-                pair(name, funcbody),
+                pair(name_with_loc, funcbody),
             ),
-            |(n, b)| ast::Stat::LocalFuncDecl(n, b),
+            |((n, loc), b)| ast::Stat {
+		v: ast::StatV::LocalFuncDecl(n, b),
+		loc: loc
+	    }
         ),
         map(
             pair(
-                preceded(kwd("local"), namelist),
+                pair(kwd("local"), namelist),
                 opt(
                     preceded(kwd("="), exprlist)
                 )
             ),
-            |(nl, m_el)| ast::Stat::LocalNames(nl, m_el)
+            |((k, nl), m_el)| ast::Stat {
+		v: ast::StatV::LocalNames(nl, m_el),
+		loc: k.location 
+	    }
         )
     ))(i);
 }
@@ -537,12 +549,12 @@ fn fieldlist<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>,  ast::Fieldlist
     return Ok((i, fields));
 }
 
-fn table_constructor<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Tableconstructor> {
-    let (i, _) = kwd("{")(i)?;
+fn table_constructor<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, (ast::Tableconstructor, LocatedSpan<&'a str>)> {
+    let (i, loc) = kwd("{")(i)?;
     let (i, maybe_fieldlist) = opt(fieldlist)(i)?;
     let (i, _) = kwd("}")(i)?;
     return Ok(
-        (i, maybe_fieldlist)
+        (i, (maybe_fieldlist, loc.location))
     );
 }
 

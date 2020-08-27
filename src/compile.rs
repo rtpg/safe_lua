@@ -240,7 +240,7 @@ pub fn compile_stat<'a>(stat: ast::Stat, code: &mut impl Code<'a>){
             // we'll push the value, then pop it
 	    {
 		push_expr(e, code);
-		code.emit(BC::POP);
+		code.emit(BC::POP, None);
 	    }
         },
         Label(name) => {
@@ -248,7 +248,8 @@ pub fn compile_stat<'a>(stat: ast::Stat, code: &mut impl Code<'a>){
         },
         Goto(name) => {
             code.emit(
-                BC::GOTO(name.to_string())
+                BC::GOTO(name.to_string()),
+		None
             )
         },
         Do(block) => {
@@ -263,11 +264,14 @@ pub fn compile_stat<'a>(stat: ast::Stat, code: &mut impl Code<'a>){
             push_expr(expr, code);
             // if it's false we jump to the end
             let jump_to_end = code.prep_fwd_jump();
-            code.emit(BC::JUMP_FALSE(jump_to_end.clone()));
+            code.emit(
+		BC::JUMP_FALSE(jump_to_end.clone(),),
+		    None
+	    );
             // else it's true, so we can evaluate the block
             compile_block(block, code);
             // if it was true, we jump back to the start position
-            code.emit(BC::JUMP(start_position));
+            code.emit(BC::JUMP(start_position), None);
             // after jump location...
             code.emit_fwd_jump_location(jump_to_end);
         },
@@ -287,16 +291,18 @@ pub fn compile_stat<'a>(stat: ast::Stat, code: &mut impl Code<'a>){
                             BC::ASSIGN_LOCAL_FROM_EXPRLIST(
                                 namelist[i].clone(),
                                 i,
-                            )
+                            ),
+			    None
                         )
                     }
-		    code.emit(BC::POP);
+		    code.emit(BC::POP, None);
                 },
                 None => {
                     // let's just make everything nil
                     for name in namelist {
                         code.emit(
-                            BC::ASSIGN_LOCAL_NIL(name.to_string())
+                            BC::ASSIGN_LOCAL_NIL(name.to_string()),
+			    None
                         )
                     }
                 }
@@ -305,7 +311,8 @@ pub fn compile_stat<'a>(stat: ast::Stat, code: &mut impl Code<'a>){
         LocalFuncDecl(name, funcbody) => {
             push_func(funcbody, code);
             code.emit(
-                BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(name.to_string())
+                BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(name.to_string()),
+		None
             );
         },
         Eql(varlist, exprlist) => {
@@ -316,7 +323,7 @@ pub fn compile_stat<'a>(stat: ast::Stat, code: &mut impl Code<'a>){
             let varlist_len = varlist.vars.len();
             for (i, var) in (0..varlist_len).zip(varlist.vars.into_iter()) {
                 // first we extract out the value to assign...
-                code.emit(BC::EXTRACT_FROM_EXPRLIST(i));
+                code.emit(BC::EXTRACT_FROM_EXPRLIST(i), None);
                 // then we do the assignment
                 push_var_assignment(var, code);
             }
@@ -331,20 +338,20 @@ pub fn compile_stat<'a>(stat: ast::Stat, code: &mut impl Code<'a>){
             // blocks
             let very_end_of_if_statement = code.prep_fwd_jump();
             // if the predicate is _false_ we go after the then block
-            code.emit(BC::JUMP_FALSE(after_then_block.clone()));
+            code.emit(BC::JUMP_FALSE(after_then_block.clone()), None);
             // now let's emit the then block;
             compile_block(then_block, code);
             // and then jump to the end
-            code.emit(BC::JUMP(very_end_of_if_statement.clone()));
+            code.emit(BC::JUMP(very_end_of_if_statement.clone()), None);
             code.emit_fwd_jump_location(after_then_block);
             //next up we see if there's any elif to deal with
             for (pred, block) in elif_list {
                 // elifs work basically the same way
                 push_expr(pred, code);
                 let after_block = code.prep_fwd_jump();
-                code.emit(BC::JUMP_FALSE(after_block.clone()));
+                code.emit(BC::JUMP_FALSE(after_block.clone()), None);
                 compile_block(block, code);
-                code.emit(BC::JUMP(very_end_of_if_statement.clone()));
+                code.emit(BC::JUMP(very_end_of_if_statement.clone()), None);
                 code.emit_fwd_jump_location(after_block);
             }
             // finally we have the else block
@@ -368,7 +375,8 @@ pub fn compile_stat<'a>(stat: ast::Stat, code: &mut impl Code<'a>){
             push_expr(expr, code);
             // then jump back to the top if needed
             code.emit(
-                BC::JUMP_FALSE(start_of_repeat)
+                BC::JUMP_FALSE(start_of_repeat),
+		None
             );
         },
         FuncDecl(funcname, funcbody) => {
@@ -380,7 +388,8 @@ pub fn compile_stat<'a>(stat: ast::Stat, code: &mut impl Code<'a>){
             }
             push_func(funcbody, code);
             code.emit(
-                BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(funcname.first_name_component.clone())
+                BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(funcname.first_name_component.clone()),
+		None
             );
         },
         For(name, start_value, limit, maybe_step, block) => {
@@ -392,21 +401,21 @@ pub fn compile_stat<'a>(stat: ast::Stat, code: &mut impl Code<'a>){
                 },
                 None => {
                     // default step of 1
-                    code.emit(BC::PUSH_NUMBER(1.0));
+                    code.emit(BC::PUSH_NUMBER(1.0), None);
                 }
             }
             // here we use specialized op codes for for loops
             // first command is used to decrement start value for the loop
-            code.emit(BC::FOR_LOOP_INIT);
+            code.emit(BC::FOR_LOOP_INIT, None);
             let for_loop_block_start = code.emit_jump_location();
             let for_loop_end = code.prep_fwd_jump();
-            code.emit(BC::FOR_LOOP_CHECK_CONDITION(name.to_string()));
+            code.emit(BC::FOR_LOOP_CHECK_CONDITION(name.to_string()), None);
             // if the condition is not valid we jump out
-            code.emit(BC::JUMP_FALSE(for_loop_end.clone()));
+            code.emit(BC::JUMP_FALSE(for_loop_end.clone()), None);
             // here we actually run the loop
             compile_block(block, code);
             // then we jump back up
-            code.emit(BC::JUMP(for_loop_block_start));
+            code.emit(BC::JUMP(for_loop_block_start), None);
             // END
             code.emit_fwd_jump_location(for_loop_end);
         },
@@ -418,33 +427,33 @@ pub fn compile_stat<'a>(stat: ast::Stat, code: &mut impl Code<'a>){
 
             // so now we have the expression list, we then move to
             // starting up our for in loop
-            code.emit(BC::FOR_IN_LOOP_INIT);
+            code.emit(BC::FOR_IN_LOOP_INIT, None);
             // we then begin the actual loop
 //            let for_loop_begin = code.emit_jump_location();
 //            let end_of_for_loop
-            code.emit(BC::PANIC("For-in loops are not implemented yet".to_string()));
+            code.emit(BC::PANIC("For-in loops are not implemented yet".to_string()), None);
         },
         Break => {
-            code.emit(BC::BREAK);
+            code.emit(BC::BREAK, None);
         },
     }
 }
 
-pub fn push_var_assignment<'a>(var: ast::Var, code: &mut impl Code<'a>){
+pub fn push_var_assignment<'a>(var: ast::Var<'a>, code: &mut impl Code<'a>){
     use super::ast::Var::*;
     match var {
-	N(name) => {
+	N(name, loc) => {
 	    // just assign directly;
-	    code.emit(BC::ASSIGN_NAME(name.to_string()));
+	    code.emit(BC::ASSIGN_NAME(name.to_string()), Some(loc));
 	},
 	ArrAccess(prefix_expr, expr) => {
 	    push_expr(expr, code);
 	    push_prefixexpr(prefix_expr, code);
-	    code.emit(BC::ASSIGN_ARR_ACCESS());
+	    code.emit(BC::ASSIGN_ARR_ACCESS(), None);
 	},
 	DotAccess(prefix_expr, name) => {
 	    push_prefixexpr(prefix_expr, code);
-	    code.emit(BC::ASSIGN_DOT_ACCESS(name.to_string()));
+	    code.emit(BC::ASSIGN_DOT_ACCESS(name.to_string()), None);
 	}
     }
 }
@@ -458,7 +467,7 @@ pub fn push_numeral<'a>(n: &String, code: &mut impl Code<'a>){
 	match i64::from_str_radix(hex_wo_pfx, 16) {
 	    Ok(v) => {
 		// TODO get rid of rounding
-		code.emit(BC::PUSH_NUMBER(v as f64))
+		code.emit(BC::PUSH_NUMBER(v as f64), None)
 	    },
 	    Err(_) => {
 		dbg!(n);
@@ -469,7 +478,7 @@ pub fn push_numeral<'a>(n: &String, code: &mut impl Code<'a>){
 	// not hex
 	match n.parse::<f64>() {
 	    Ok(v) => {
-		code.emit(BC::PUSH_NUMBER(v))
+		code.emit(BC::PUSH_NUMBER(v), None)
 	    },
 	    Err(_) => {
 		dbg!(n);
@@ -479,19 +488,21 @@ pub fn push_numeral<'a>(n: &String, code: &mut impl Code<'a>){
     }
 }
 pub fn push_expr<'a>(expr: ast::Expr, code: &mut impl Code<'a>){
-    use ast::Expr::*;
 
+    use ast::Expr::*;
+    
     match expr {
-        Nil => code.emit(BC::PUSH_NIL),
-        False => code.emit(BC::PUSH_FALSE),
-        True => code.emit(BC::PUSH_TRUE),
-        Numeral(n) => {
+        Nil(loc) => code.emit(BC::PUSH_NIL, Some(loc)),
+        False(loc) => code.emit(BC::PUSH_FALSE, Some(loc)),
+        True(loc) => code.emit(BC::PUSH_TRUE, Some(loc)),
+        Numeral(n, loc) => {
 	    push_numeral(&n, code);
 	},
-        LiteralString(s) => code.emit(
-            BC::PUSH_STRING(s.to_string()),
+        LiteralString(s, loc) => code.emit(
+            BC::PUSH_STRING(s.to_string(), ),
+	    Some(loc),
         ),
-        Ellipsis => panic!("No ellipsis support yet"),
+        Ellipsis(loc) => panic!("No ellipsis support yet"),
         BinOp(left, op, right) => {
             // here we need to push the left and right expressions
             // then evaluate the operator
@@ -499,7 +510,7 @@ pub fn push_expr<'a>(expr: ast::Expr, code: &mut impl Code<'a>){
             push_expr(*right, code);
             // this should panic
             if let lex::LexValue::Keyword(raw_op) = op {
-                code.emit(BC::BINOP(raw_op.to_string()));
+                code.emit(BC::BINOP(raw_op.to_string()), None);
             } else {
                 panic!("Invalid binary operator");
             }
@@ -507,12 +518,12 @@ pub fn push_expr<'a>(expr: ast::Expr, code: &mut impl Code<'a>){
         UnOp(op, left) => {
             // here just have to process one operator
             push_expr(*left, code);
-            code.emit(BC::UNOP(op.to_string()));
+            code.emit(BC::UNOP(op.to_string()), None);
         },
         Pref(prefixed_expr) => {
             push_prefixexpr(*prefixed_expr, code);
         },
-        Tbl(ctr) => {
+        Tbl(ctr, _loc) => {
             push_table(ctr, code);
         },
         Functiondef(funcbody) => {
@@ -540,11 +551,11 @@ pub fn push_func<'a>(body: ast::Funcbody, code: &mut impl Code<'a>){
     compile_block(body.body, &mut inner_code);
 
     let code_index = code.write_inner_code(inner_code);
-    code.emit(BC::PUSH_CODE_INDEX(code_index));
+    code.emit(BC::PUSH_CODE_INDEX(code_index), None);
     push_parlist(&body.parlist, code);
     // this takes the parlist and the code index 
     // and builds a function from it
-    code.emit(BC::BUILD_FUNCTION);
+    code.emit(BC::BUILD_FUNCTION, None);
 }
 
 pub fn push_parlist<'a>(maybe_parlist: &Option<ast::Parlist>, code: &mut impl Code<'a>){

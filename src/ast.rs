@@ -22,6 +22,11 @@ pub struct Block<'a> {
     pub retstat: Option<Retstat<'a>>
 }
 
+impl<'a> HasLoc<'a> for Block<'a> {
+    fn loc(&'a self) -> LocatedSpan<&'a str> {
+	return self.stats[0].loc
+    }
+}
 // pub fn parse_block(input: &Vec<Lex>) -> R<Block> {
 //     let (input, stats) = many1(parse_stat)(input)?;
 //     let (input, return_stat) = opt(parse_retstat)(input)?;
@@ -158,7 +163,7 @@ pub enum Var<'a> {
     DotAccess(Prefixexpr<'a>, Name),
 }
 
-trait HasLoc<'a> {
+pub trait HasLoc<'a> {
     fn loc(&'a self) -> LocatedSpan<&'a str>;
 }
 
@@ -196,7 +201,7 @@ pub enum Expr<'a> {
   	// functiondef ::= function funcbody
     Functiondef(Funcbody<'a>),
     Pref(Box<Prefixexpr<'a>>),
-    Tbl(Tableconstructor<'a>),
+    Tbl(Tableconstructor<'a>, LocatedSpan<&'a str>),
     BinOp(Box<Expr<'a>>, BinaryOperator, Box<Expr<'a>>),
     UnOp(UnaryOperator, Box<Expr<'a>>),
 }
@@ -211,11 +216,11 @@ impl<'a> HasLoc<'a> for Expr<'a> {
 	    Numeral(_, l) => *l,
 	    LiteralString(_, l) => *l,
 	    Ellipsis(l) => *l,
-	    Functiondef(fb) => fb.loc(),
+	    Functiondef(fb) => fb.location,
 	    Pref(pexpr) => pexpr.loc(),
-	    Tbl(tbl) => tbl.loc(),
+	    Tbl(tbl, loc) => *loc,
 	    BinOp(fst, _op, _snd) => fst.loc(),
-	    UnOp(unop, _) => unop.loc()
+	    UnOp(_unop, exp) => exp.loc()
 	}
     }
 }
@@ -269,6 +274,7 @@ pub enum Args<'a> {
 pub struct Funcbody<'a> {
     pub parlist: Option<Parlist>,
     pub body: Block<'a>,
+    pub location: LocatedSpan<&'a str>,
 }
 	// parlist ::= namelist [‘,’ ‘...’] | ‘...’
 #[derive(Debug, Clone, PartialEq)]

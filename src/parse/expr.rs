@@ -51,13 +51,13 @@ fn expr_consume<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Expr> {
 fn expr_constants<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Expr> {
     // return expr constants or parenthesized
     return alt((
-        map(kwd("nil"), |_| ast::Expr::Nil),
-        map(kwd("true"), |_| ast::Expr::True),
-        map(kwd("false"), |_| ast::Expr::False),
+        map(kwd("nil"), |k| ast::Expr::Nil(k.location)),
+        map(kwd("true"), |k| ast::Expr::True(k.location)),
+        map(kwd("false"), |k| ast::Expr::False(k.location)),
         num_parser,
-        map(literal_string_parser, |s| ast::Expr::LiteralString(s)),
-        map(kwd("..."), |_| ast::Expr::Ellipsis),
-        map(table_constructor, |t| ast::Expr::Tbl(t)),
+        map(literal_string_parser, |(s, loc)| ast::Expr::LiteralString(s, loc)),
+        map(kwd("..."), |k| ast::Expr::Ellipsis(k.location)),
+        map(table_constructor, |(t, loc)| ast::Expr::Tbl(t, loc)),
         function_def,
     ))(i);
 }
