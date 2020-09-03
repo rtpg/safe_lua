@@ -359,14 +359,17 @@ fn funcdecl<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat> {
             kwd("function"),
             pair(funcname, funcbody),
         ),
-        |(n, b)| ast::Stat {
+        |(n, b)| {
+	    let loc = n.loc.clone();
+	    return ast::Stat {
 	    v: ast::StatV::FuncDecl(n, b),
-	    loc: n.loc
+	    loc: loc
+	    }
 	}
     )(i);
 }
 
-fn stat<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat> {
+fn stat<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat<'a>> {
     return alt((
         map(kwd(";"), |k| ast::Stat {
 	    v: ast::StatV::Semicol,
@@ -376,7 +379,7 @@ fn stat<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat> {
             separated_pair(varlist, kwd("="), exprlist),
             |(varlist, explist)| ast::Stat {
 		v: ast::StatV::Eql(varlist, explist),
-		loc: HasLoc::loc(&varlist) 
+		loc: HasLoc::loc(&varlist.clone()) 
 	    }
         ),
         // FFFFFFFFFFFFFFF
@@ -405,7 +408,10 @@ fn stat<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat> {
                 ),
                 expr,
             ),
-            |(b, e)| ast::Stat {v: ast::StatV::Repeat(b, e), loc: b.loc() }
+            |(b, e)| ast::Stat {
+		v: ast::StatV::Repeat(b.clone(), e),
+		loc: b.clone().loc().clone()
+	    }
         ),
         map(
             surrounded(
@@ -612,7 +618,7 @@ pub fn try_parse(input: &str) -> Option<ast::Block> {
     return Some(b);
 }
 
-pub fn parse(input: &str) -> ast::Block {
+pub fn parse<'a>(input: &'a str) -> ast::Block<'a> {
     let input = LexInput::new(input);
     let (input, tokens) = lex_all(input).unwrap();
     if input.to_string().len() > 0 {
@@ -1151,7 +1157,8 @@ local x = 3;
             expr(&l),
          Ok((
             vec![].as_ref(),
-            ast::Expr::Nil
+             ast::Expr::Nil(LocatedSpan::new("")
+	     )
         )));
 
         let m: Vec<lex::Lex> = lex_all(LexInput::new("'hi this is a string with an \\' escape'")).unwrap().1;
@@ -1160,7 +1167,8 @@ local x = 3;
             expr(&m),Ok((
                 vec![].as_ref(),
                 ast::Expr::LiteralString(
-                    String::from("hi this is a string with an ' escape")
+                    String::from("hi this is a string with an ' escape"),
+		    LocatedSpan::new("")
                 )
             ))
         )

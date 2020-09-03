@@ -231,7 +231,7 @@ impl<'a> Code<'a> for CodeObj<'a> {
 }
 
 
-pub fn compile_stat<'a>(stat: ast::Stat, code: &mut impl Code<'a>){
+pub fn compile_stat<'a>(stat: ast::Stat<'a>, code: &mut impl Code<'a>){
     use ast::StatV::*;
 
     match stat.v {
@@ -487,7 +487,7 @@ pub fn push_numeral<'a>(n: &String, code: &mut impl Code<'a>){
 	}
     }
 }
-pub fn push_expr<'a>(expr: ast::Expr, code: &mut impl Code<'a>){
+pub fn push_expr<'a>(expr: ast::Expr<'a>, code: &mut impl Code<'a>){
 
     use ast::Expr::*;
     
@@ -495,14 +495,14 @@ pub fn push_expr<'a>(expr: ast::Expr, code: &mut impl Code<'a>){
         Nil(loc) => code.emit(BC::PUSH_NIL, Some(loc)),
         False(loc) => code.emit(BC::PUSH_FALSE, Some(loc)),
         True(loc) => code.emit(BC::PUSH_TRUE, Some(loc)),
-        Numeral(n, loc) => {
+        Numeral(n, _loc) => {
 	    push_numeral(&n, code);
 	},
         LiteralString(s, loc) => code.emit(
             BC::PUSH_STRING(s.to_string(), ),
 	    Some(loc),
         ),
-        Ellipsis(loc) => panic!("No ellipsis support yet"),
+        Ellipsis(_loc) => panic!("No ellipsis support yet"),
         BinOp(left, op, right) => {
             // here we need to push the left and right expressions
             // then evaluate the operator
@@ -542,7 +542,7 @@ pub fn new_code_obj<'a>() -> CodeObj<'a>{
     }
 }
 
-pub fn push_func<'a>(body: ast::Funcbody, code: &mut impl Code<'a>){
+pub fn push_func<'a>(body: ast::Funcbody<'a>, code: &mut impl Code<'a>){
     // take a function body and register the op codes to push it to the stack
     // we'll need to build up a code object for this body to represent in the
     // bytecode as well
@@ -560,22 +560,23 @@ pub fn push_func<'a>(body: ast::Funcbody, code: &mut impl Code<'a>){
 
 pub fn push_parlist<'a>(maybe_parlist: &Option<ast::Parlist>, code: &mut impl Code<'a>){
     match maybe_parlist {
-        None => code.emit(BC::PUSH_NIL),
+        None => code.emit(BC::PUSH_NIL, None),
         Some(parlist) => {
             code.emit(
                 BC::PUSH_NAMELIST(
                     parlist.namelist.clone(),
                     parlist.has_ellipsis,
-                )
+                ),
+		None
             )
         }
     }
 }
-pub fn push_table<'a>(ctr: std::option::Option<std::vec::Vec<ast::Field>>, code: &mut impl Code<'a>){
+pub fn push_table<'a>(ctr: std::option::Option<std::vec::Vec<ast::Field<'a>>>, code: &mut impl Code<'a>){
     use ast::Field::*;
 
     // push a table based on its constructor
-    code.emit(BC::PUSH_NEW_TBL);
+    code.emit(BC::PUSH_NEW_TBL, None);
     // we will build tables by iterating over field listings
     match ctr {
         // if the table is just {} we just needed to emit the 
@@ -596,12 +597,14 @@ pub fn push_table<'a>(ctr: std::option::Option<std::vec::Vec<ast::Field>>, code:
                         // here we want to emit the string
                         code.emit(
                             BC::PUSH_STRING(n.to_string()),
+			    None,
                         );
                         push_expr(v, code);
                     },
                     Raw(e) => {
                         code.emit(
-			    BC::PUSH_CODE_INDEX(raw_idx)
+			    BC::PUSH_CODE_INDEX(raw_idx),
+			    None
 //                            BC::PUSH_NUMERAL(raw_idx.to_string()),
                         );
                         push_expr(e, code);
@@ -611,20 +614,21 @@ pub fn push_table<'a>(ctr: std::option::Option<std::vec::Vec<ast::Field>>, code:
                 // at the end we want to assign to the table
                 code.emit(
                     BC::ASSIGN_TABLE_VALUE,
+		    None
                 );
             }
         }
     }
 }
 
-pub fn push_prefixexpr<'a>(pexpr: ast::Prefixexpr, code: &mut impl Code<'a>){
+pub fn push_prefixexpr<'a>(pexpr: ast::Prefixexpr<'a>, code: &mut impl Code<'a>){
     use ast::Prefix::*;
     use ast::Suffix::*;
 
     match pexpr.prefix {
         ParenedExpr(e) => push_expr(e, code),
-        Varname(n) => push_variable(
-            ast::Var::N(n.to_string()), code)
+        Varname(n, loc) => push_variable(
+            ast::Var::N(n.to_string(), loc), code)
     }
 
     for suffix in pexpr.suffixes { 
@@ -634,21 +638,21 @@ pub fn push_prefixexpr<'a>(pexpr: ast::Prefixexpr, code: &mut impl Code<'a>){
                 // a is already on the stack
                 // push b
                 push_expr(expr, code);
-                code.emit(BC::ARRAY_ACCESS);
+                code.emit(BC::ARRAY_ACCESS, None);
             },
             DotAccess(name) => {
                 // a.b
                 // a is already on the satck
                 // push b
-                code.emit(BC::PUSH_STRING(name.to_string()));
-                code.emit(BC::DOT_ACCESS);
+                code.emit(BC::PUSH_STRING(name.to_string()), None);
+                code.emit(BC::DOT_ACCESS, None);
             },
             MethodCall(_name, _args) => {
                 // a(:name)(args)
                 // a is already on the stack
                 match &_name {
                     Some(n) => {
-                        code.emit(BC::PUSH_STRING(n.to_string()))
+                        code.emit(BC::PUSH_STRING(n.to_string()), None)
                     },
                     None => {}
                 }
@@ -658,10 +662,10 @@ pub fn push_prefixexpr<'a>(pexpr: ast::Prefixexpr, code: &mut impl Code<'a>){
 
                 match _name {
                     Some(_n) => {
-                        code.emit(BC::CALL_METHOD)
+                        code.emit(BC::CALL_METHOD, None)
                     },
                     None => {
-                        code.emit(BC::CALL_FUNCTION)
+                        code.emit(BC::CALL_FUNCTION, None)
                     }
                 }
             }
@@ -669,14 +673,15 @@ pub fn push_prefixexpr<'a>(pexpr: ast::Prefixexpr, code: &mut impl Code<'a>){
     }
 }
 
-pub fn push_variable<'a>(v: ast::Var, code: &mut impl Code<'a>){
+pub fn push_variable<'a>(v: ast::Var<'a>, code: &mut impl Code<'a>){
     use ast::Var::*;
 
     match v {
-        N(name) => {
+        N(name, loc) => {
             // name access
             code.emit(
-                BC::PUSH_VAL_BY_NAME(name.to_string())
+                BC::PUSH_VAL_BY_NAME(name.to_string()),
+		Some(loc)
             )
         },
         ArrAccess(prefix_expr, expr) => {
@@ -685,20 +690,20 @@ pub fn push_variable<'a>(v: ast::Var, code: &mut impl Code<'a>){
             push_prefixexpr(prefix_expr, code);
             // push b
             push_expr(expr, code);
-            code.emit(BC::ARRAY_ACCESS);
+            code.emit(BC::ARRAY_ACCESS, None);
         },
         DotAccess(prefix_expr, name) => {
             // a.b
             // push a
             push_prefixexpr(prefix_expr, code);
             // push b
-            code.emit(BC::PUSH_STRING(name.to_string()));
-            code.emit(BC::DOT_ACCESS);
+            code.emit(BC::PUSH_STRING(name.to_string()), None);
+            code.emit(BC::DOT_ACCESS, None);
         }
     }
 }
 
-pub fn push_exprlist<'a>(exprs: std::vec::Vec<ast::Expr>, code: &mut impl Code<'a>){
+pub fn push_exprlist<'a>(exprs: std::vec::Vec<ast::Expr<'a>>, code: &mut impl Code<'a>){
     // take a list of expressions, and build the list from the values
     // being in the stack
     // [] -> [list_of_expressions]
@@ -706,11 +711,11 @@ pub fn push_exprlist<'a>(exprs: std::vec::Vec<ast::Expr>, code: &mut impl Code<'
     for expr in exprs {
         push_expr(expr, code);
     }
-    code.emit(BC::BUILD_LIST(expr_count));
+    code.emit(BC::BUILD_LIST(expr_count), None);
 }
 
 
-pub fn push_args<'a>(args: ast::Args, code: &mut impl Code<'a>){
+pub fn push_args<'a>(args: ast::Args<'a>, code: &mut impl Code<'a>){
     // build up the argument list for passing to a function
     // at the end we should have on top of the stack one list element
     // holding our arguments
@@ -719,19 +724,19 @@ pub fn push_args<'a>(args: ast::Args, code: &mut impl Code<'a>){
     match args {
         Literal(s) => {
             // just build the string and make a list
-            code.emit(BC::PUSH_STRING(s.to_string()));
-            code.emit(BC::BUILD_LIST(1));
+            code.emit(BC::PUSH_STRING(s.to_string()), None);
+            code.emit(BC::BUILD_LIST(1), None);
         },
         Table(ctr) => {
             push_table(ctr, code);
-            code.emit(BC::BUILD_LIST(1));
+            code.emit(BC::BUILD_LIST(1), None);
         },
         List(maybe_exprs) => {
             match maybe_exprs {
                 None => {
                     // f()
                     // here we'll just push None to the stack
-                    code.emit(BC::PUSH_NIL);
+                    code.emit(BC::PUSH_NIL, None);
                 },
                 Some(exprs) => {
                     // f(a, b, c)
@@ -739,7 +744,7 @@ pub fn push_args<'a>(args: ast::Args, code: &mut impl Code<'a>){
                     for expr in exprs {
                         push_expr(expr, code);
                     }
-                    code.emit(BC::BUILD_LIST(expr_count));
+                    code.emit(BC::BUILD_LIST(expr_count), None);
                 }
             }
         }
@@ -769,7 +774,7 @@ pub fn push_args<'a>(args: ast::Args, code: &mut impl Code<'a>){
 //         }
 //     }
 // }
-pub fn compile_block<'a>(b: ast::Block, code: &mut impl Code<'a>) {
+pub fn compile_block<'a>(b: ast::Block<'a>, code: &mut impl Code<'a>) {
 
     let stats = b.stats;
     let retstat = b.retstat;
@@ -781,12 +786,12 @@ pub fn compile_block<'a>(b: ast::Block, code: &mut impl Code<'a>) {
         None => {},
         Some(retstat) => {
             match retstat.return_expr {
-                None => code.emit(BC::RETURN_NONE),
+                None => code.emit(BC::RETURN_NONE, None),
                 Some(exprlist) => {
 		    let l = exprlist.len();
                     if l == 0 {
                         // here we're also in a return none case
-                        code.emit(BC::RETURN_NONE);
+                        code.emit(BC::RETURN_NONE, None);
                     } else {
                         // we first need to get all the values
                         // and then build up a list
@@ -801,16 +806,17 @@ pub fn compile_block<'a>(b: ast::Block, code: &mut impl Code<'a>) {
                         // then adds one
                         code.emit(
                             BC::BUILD_LIST(exprlist_len),
+			    None
                         );
                         // this removes the last element
-                        code.emit(BC::RETURN_VALUE);
+                        code.emit(BC::RETURN_VALUE, None);
                     }
                 }
             }
         }
     }
 }
-pub fn compile<'a>(parsed_block: ast::Block) -> CodeObj<'a> {
+pub fn compile<'a>(parsed_block: ast::Block<'a>) -> CodeObj<'a> {
     let mut code = new_code_obj();
     compile_block(parsed_block, &mut code);
     return code;

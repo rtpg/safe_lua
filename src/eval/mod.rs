@@ -183,7 +183,7 @@ pub fn frame_from_code(code:Rc<CodeObj>) -> LuaFrame {
 	env: global_env()
     }
 }
-pub fn initial_run_state<'a>(lua_file_path: &'a str) -> LuaRunState {
+pub fn initial_run_state<'a>(lua_file_path: &'a str) -> LuaRunState<'a> {
 
     file_contents!(lua_file_path, contents);
     let parsed_content = parse(&contents);

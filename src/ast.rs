@@ -177,8 +177,8 @@ impl<'a> HasLoc<'a> for Var<'a> {
 	use self::Var::*;
 	match self {
 	    N(_, loc) => *loc,
-	    ArrAccess(p, e) => p.loc(),
-	    DotAccess(p, n) => p.loc(),
+	    ArrAccess(p, _e) => p.loc(),
+	    DotAccess(p, _n) => p.loc(),
 	}
     }
 }
@@ -218,7 +218,7 @@ impl<'a> HasLoc<'a> for Expr<'a> {
 	    Ellipsis(l) => *l,
 	    Functiondef(fb) => fb.location,
 	    Pref(pexpr) => pexpr.loc(),
-	    Tbl(tbl, loc) => *loc,
+	    Tbl(_tbl, loc) => *loc,
 	    BinOp(fst, _op, _snd) => fst.loc(),
 	    UnOp(_unop, exp) => exp.loc()
 	}
@@ -233,9 +233,9 @@ pub struct Prefixexpr<'a> {
 
 impl<'a> HasLoc<'a> for Prefixexpr<'a> {
     fn loc(&'a self) -> LocatedSpan<&'a str> {
-	match self.prefix {
+	match &self.prefix {
 	    Prefix::ParenedExpr(expr) => expr.loc(),
-	    Prefix::Varname(_, loc) => loc,
+	    Prefix::Varname(_, loc) => *loc,
 	}
     }
 }
