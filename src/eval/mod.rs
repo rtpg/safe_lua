@@ -1,8 +1,6 @@
 #[macro_use]
 #[allow(dead_code)]
 pub mod exec;
-use ::file_contents;
-use std::io::Read;
 use std::collections::HashMap;
 use parse::parse;
 use super::ast;
@@ -10,7 +8,6 @@ use super::compile::{
     CodeObj,
     compile,
 };
-use std::fs::File;
 use std::rc::Rc;
 use super::natives::{
     lua_assert,
@@ -183,10 +180,21 @@ pub fn frame_from_code(code:Rc<CodeObj>) -> LuaFrame {
 	env: global_env()
     }
 }
-pub fn initial_run_state<'a>(lua_file_path: &'a str) -> LuaRunState<'a> {
 
-    file_contents!(lua_file_path, contents);
-    let parsed_content = parse(&contents);
+pub fn brw(s: &str) -> &str {
+    s
+}
+
+// QUESTION FOR STACK OVERFLOW
+//pub fn cnts<'a, 'b>(file_path: &'a str) -> (String, usize, &'b str) {
+//    file_contents!(file_path, contents);
+//    let r = brw(&contents as &'b str);
+//    return (contents, 1, r);
+//}
+
+pub fn initial_run_state<'a>(contents: &'a str, lua_file_path: &'a str) -> LuaRunState<'a> {
+
+    let parsed_content = parse(contents);
     let compiled_code = compile(parsed_content);
     let boxed_code = Rc::new(compiled_code);
     return LuaRunState {

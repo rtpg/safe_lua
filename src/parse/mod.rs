@@ -377,9 +377,12 @@ fn stat<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat<'a>> {
 	}),
         map(
             separated_pair(varlist, kwd("="), exprlist),
-            |(varlist, explist)| ast::Stat {
+            |(varlist, explist)| {
+		let the_loc = HasLoc::loc(&varlist).clone();
+		return ast::Stat {
 		v: ast::StatV::Eql(varlist, explist),
-		loc: HasLoc::loc(&varlist.clone()) 
+		loc: the_loc.clone()
+		}
 	    }
         ),
         // FFFFFFFFFFFFFFF
@@ -387,7 +390,10 @@ fn stat<'a>(i: &'a IStream<'a>) -> IResult<&'a IStream<'a>, ast::Stat<'a>> {
         // this is more open than lua's normal syntax
         map(
             expr,
-            |e| ast::Stat {v: ast::StatV::RawExpr(e), loc: e.loc() }
+            |e| {
+		let the_loc = e.loc();
+		ast::Stat {v: ast::StatV::RawExpr(e), loc: the_loc }
+	    }
         ),
         map(
             surrounded(kwd("::"), name_with_loc, kwd("::")),
