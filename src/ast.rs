@@ -22,8 +22,8 @@ pub struct Block<'a> {
     pub retstat: Option<Retstat<'a>>
 }
 
-impl<'a> HasLoc<'a> for Block<'a> {
-    fn loc(&'a self) -> LocatedSpan<&'a str> {
+impl<'a, 'b> HasLoc<'a, 'b> for Block<'a> {
+    fn loc(&'b self) -> LocatedSpan<&'a str> {
 	return self.stats[0].loc
     }
 }
@@ -163,17 +163,17 @@ pub enum Var<'a> {
     DotAccess(Prefixexpr<'a>, Name),
 }
 
-pub trait HasLoc<'a> {
-    fn loc(&'a self) -> LocatedSpan<&'a str>;
+pub trait HasLoc<'a, 'b> {
+    fn loc(&'b self) -> LocatedSpan<&'a str>;
 }
 
-impl<'a> HasLoc<'a> for Varlist<'a> {
-    fn loc(&'a self) -> LocatedSpan<&'a str> {
+impl<'a, 'b> HasLoc<'a, 'b> for Varlist<'a> {
+    fn loc(&'b self) -> LocatedSpan<&'a str> {
 	self.vars[0].loc()
     }
 }
-impl<'a> HasLoc<'a> for Var<'a> {
-    fn loc(&'a self) -> LocatedSpan<&'a str> {
+impl<'a, 'b> HasLoc<'a, 'b> for Var<'a> {
+    fn loc(&'b self) -> LocatedSpan<&'a str> {
 	use self::Var::*;
 	match self {
 	    N(_, loc) => *loc,
@@ -206,8 +206,8 @@ pub enum Expr<'a> {
     UnOp(UnaryOperator, Box<Expr<'a>>),
 }
 
-impl<'a> HasLoc<'a> for Expr<'a> {
-    fn loc(&'a self) -> LocatedSpan<&'a str> {
+impl<'a, 'b> HasLoc<'a, 'b> for Expr<'a> {
+    fn loc(&'b self) -> LocatedSpan<&'a str> {
 	use ast::Expr::*;
 	match self {
 	    True(l) => *l,
@@ -231,8 +231,8 @@ pub struct Prefixexpr<'a> {
     pub suffixes: Vec<Suffix<'a>>,
 }
 
-impl<'a> HasLoc<'a> for Prefixexpr<'a> {
-    fn loc(&'a self) -> LocatedSpan<&'a str> {
+impl<'a, 'b> HasLoc<'a, 'b> for Prefixexpr<'a> {
+    fn loc(&'b self) -> LocatedSpan<&'a str> {
 	match &self.prefix {
 	    Prefix::ParenedExpr(expr) => expr.loc(),
 	    Prefix::Varname(_, loc) => *loc,

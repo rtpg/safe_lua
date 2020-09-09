@@ -35,6 +35,6 @@ fn main(){
     let compile_result = compile::compile(parse_result);
     dbg!(compile_result);
 
-    let run_state = eval::initial_run_state(filepath);
+    let run_state = eval::initial_run_state(&contents, filepath);
     eval::run_to_checkpoint(run_state);
 }
