@@ -5,10 +5,6 @@ use lex::{
     LexValue
 };
 
-pub struct Node<'a, T> {
-    pub v: T,
-    pub loc: LocatedSpan<&'a str>
-}
 // As usual in extended BNF, {A} means 0 or more As, and [A] means an optional A.
 	// chunk ::= block
 #[derive(Debug, Clone, PartialEq)]
@@ -24,6 +20,9 @@ pub struct Block<'a> {
 
 impl<'a, 'b> HasLoc<'a, 'b> for Block<'a> {
     fn loc(&'b self) -> LocatedSpan<&'a str> {
+	if self.stats.len() == 0 {
+	    return LocatedSpan::new("UNKNOWN LOC (BLOCK)")
+	}
 	return self.stats[0].loc
     }
 }

@@ -181,16 +181,6 @@ pub fn frame_from_code(code:Rc<CodeObj>) -> LuaFrame {
     }
 }
 
-pub fn brw(s: &str) -> &str {
-    s
-}
-
-// QUESTION FOR STACK OVERFLOW
-//pub fn cnts<'a, 'b>(file_path: &'a str) -> (String, usize, &'b str) {
-//    file_contents!(file_path, contents);
-//    let r = brw(&contents as &'b str);
-//    return (contents, 1, r);
-//}
 
 pub fn initial_run_state<'a>(contents: &'a str, lua_file_path: &'a str) -> LuaRunState<'a> {
 

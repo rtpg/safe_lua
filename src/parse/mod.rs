@@ -1166,28 +1166,54 @@ local x = 3;
             }
         }
     }
+
     #[test]
     fn test_parse(){
-        let l: Vec<lex::Lex> = lex_all(LexInput::new("nil")).unwrap().1;
-        assert_eq!( 
-            expr(&l),
-         Ok((
-            vec![].as_ref(),
-             ast::Expr::Nil(LocatedSpan::new("")
-	     )
-        )));
+	let input = "nil";
+        let l: Vec<lex::Lex> = lex_all(LexInput::new(input)).unwrap().1;
+	let result = expr(&l);
+	match result {
+	    Ok((vec, ast)) => {
+		assert_eq!(vec.len(), 0);
+		match ast {
+		    ast::Expr::Nil(loc) => {
+			assert_eq!(loc.location_offset(), 3);
+			assert_eq!(loc.location_line(), 1);
+		    },
+		    v@_ => {
+			dbg!(v);
+			panic!("failed");
+		    }
+		}
+	    },
+	    e@_ => {
+		dbg!(e);
+		panic!("failed");
+	    }
+	}
 
         let m: Vec<lex::Lex> = lex_all(LexInput::new("'hi this is a string with an \\' escape'")).unwrap().1;
 
-        assert_eq!(
-            expr(&m),Ok((
-                vec![].as_ref(),
-                ast::Expr::LiteralString(
-                    String::from("hi this is a string with an ' escape"),
-		    LocatedSpan::new("")
-                )
-            ))
-        )
+	match expr(&m) {
+	    Ok((vec, ast)) => {
+		assert_eq!(vec.len(), 0);
+		match ast {
+		    ast::Expr::LiteralString(s, loc) => {
+			assert_eq!(s, "hi this is a string with an ' escape");
+			assert_eq!(loc.location_offset(), 1);
+			assert_eq!(loc.location_line(), 1);
+		    },
+		    v@_ => {
+			dbg!(v);
+			panic!("failed");
+		    }
+		}
+	    },
+	    e@_ => {
+		dbg!(e);
+		panic!("failed");
+	    }
+	}
     }
 
     

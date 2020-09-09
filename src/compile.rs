@@ -122,18 +122,18 @@ impl<'a> Sourcemap<'a> {
     }
     pub fn write_map(&mut self, bytecode_position: usize, location: LocatedSpan<&'a str>){
 	// write the mapping for the bytecode position
-	if self.map_data.len() < bytecode_position - 1 {
+	if self.map_data.len() < bytecode_position + 1 {
 	    // copy the last known location N times
 	    let default_location = match self.map_data.len() {
 		0 => LocatedSpan::new("unknown location"),
 		_ => self.map_data[self.map_data.len()-1]
 	    };
 	    self.map_data.resize(
-		bytecode_position,
+		bytecode_position + 1,
 		default_location,
 	    );
 	}
-	self.map_data[bytecode_position-1] = location
+	self.map_data[bytecode_position] = location
     }
 
     pub fn get_location(&self, bytecode_position: usize) -> LocatedSpan<&str> {
