@@ -16,6 +16,10 @@ use super::natives::{
 };
 use super::lua_stdlib::stdlib;
 
+// debug toggles
+const DBG_PRINT_INSTRUCTIONS: bool = false;
+const DBG_POP_PUSH: bool = false;
+
 // our Lua values
 #[derive(Clone)]
 pub enum LV {
@@ -47,9 +51,9 @@ pub enum LV {
 }
 
 #[derive(Debug)]
-pub struct LuaExc<'a> {
+pub struct LuaExc {
     // a Lua Exception
-    pub msg: &'a str 
+    pub msg: String 
 }
 
 fn lv_fmt(lv: &LV, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

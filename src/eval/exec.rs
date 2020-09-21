@@ -1,3 +1,5 @@
+use eval::DBG_POP_PUSH;
+use eval::DBG_PRINT_INSTRUCTIONS;
 use eval::LuaRunState;
 use eval::LV;
 use eval::LuaValueStack;
@@ -14,14 +16,21 @@ pub enum ExecResult {
 
 
 fn print_and_push(stack: &mut LuaValueStack, val: LV) {
-    println!("PUSH => {}", val);
+    if DBG_POP_PUSH {
+	println!("PUSH => {}", val);
+    }
     stack.values.push(val);
 }
 
 macro_rules! vm_panic {
     ($s: expr, $err: expr) => {
-	println!("Lua VM crashed at");
-	dbg!($s.current_frame.code.sourcemap.get_location($s.current_frame.pc));
+	println!("Lua VM crashed at: ");
+	// TODO unwind the entire frame stack here for more information
+	println!(
+	    "Line {0} of {1}",
+	    $s.current_frame.code.sourcemap.get_location($s.current_frame.pc).location_line(),
+	    $s.file_path
+	);
 	println!("With:");
 	dbg!($err);
 	panic!("VM CRASH");
@@ -34,7 +43,9 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 	() => {
 	    match s.current_frame.stack.values.pop() {
 		Some(v) => {
-		    println!("POP => {}", v);
+		    if DBG_POP_PUSH {
+			println!("POP => {}", v);
+		    }
 		    v
 		}
 		None => {panic!("Popping an empty stack")}
@@ -65,7 +76,9 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 	// But if we actually were trying to have the same value we'll allow it
 	// by setting a new one here
 	let mut intended_next_pc: Option<JumpTarget> = None;
-	dbg!(next_instruction);
+	if DBG_PRINT_INSTRUCTIONS {
+	    dbg!(next_instruction);
+	}
         match next_instruction {
             BC::NOOP => {
 		// noop, just do nothing
@@ -149,7 +162,6 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 			    Ok(v) => v,
 			    Err(err) => {
 				// get the location
-				
 				vm_panic!(s, err);
 			    }
 			}

@@ -31,24 +31,34 @@ pub fn lua_binop_eq_impl(l: &LV, r: &LV) -> bool {
     }
 }
 
-pub fn lua_exponent_eq<'a>(l: &LV, r: &LV) -> Result<LV, LuaExc<'a>> {
+pub fn lua_exponent_eq(l: &LV, r: &LV) -> Result<LV, LuaExc> {
     match l {
 	Num(ll) => {
 	    match r {
 		Num(rr) => Ok(Num(ll.powf(*rr))),
 		_ => {
+		    let msg = format!(
+			"Type mismatch on exponent. Received {0} and {1}",
+			l,
+			r
+		    );
 		    Err(
 			LuaExc {
-			    msg: "Type mismatch on exponent"
+			    msg: msg
 			}
 		    )
 		}
 	    }
 	},
 	_ => {
+	    let msg = format!(
+		"Type mismatch on exponent. Received {0} and {1}",
+		l,
+		r
+	    );
 	    Err(
 		LuaExc {
-		    msg: "Type mismatch on exponent"
+		    msg: msg 
 		}
 	    )
 	}

@@ -1187,7 +1187,7 @@ local x = 3;
 		}
 	    },
 	    e@_ => {
-		dbg!(e);
+		dbg!(e).unwrap();
 		panic!("failed");
 	    }
 	}
@@ -1210,7 +1210,7 @@ local x = 3;
 		}
 	    },
 	    e@_ => {
-		dbg!(e);
+		dbg!(e).unwrap();
 		panic!("failed");
 	    }
 	}
