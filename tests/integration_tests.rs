@@ -52,7 +52,6 @@ lua_tests! {
     test_files: "lua_tests/files.lua",
     test_gc: "lua_tests/gc.lua",
     test_goto: "lua_tests/goto.lua",
-    test_libs: "lua_tests/libs.lua",
     test_literals: "lua_tests/literals.lua",
     test_locals: "lua_tests/locals.lua",
     test_ltests: "lua_tests/ltests.lua",
