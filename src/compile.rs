@@ -24,6 +24,7 @@ pub enum JumpTarget {
 pub enum BC {
     PUSH_NIL,
     PUSH_FALSE, PUSH_TRUE,
+    PUSH_ELLIPSIS, 
     PUSH_NUMERAL(String), PUSH_STRING(String),
     PUSH_NUMBER(f64),
     PUSH_CODE_INDEX(usize),
@@ -309,7 +310,7 @@ pub fn compile_stat<'a>(stat: ast::Stat<'a>, code: &mut impl Code<'a>){
             }
         },
         LocalFuncDecl(name, funcbody) => {
-            push_func(funcbody, code);
+            push_func(funcbody, false, code);
             code.emit(
                 BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(name.to_string()),
 		None
@@ -380,17 +381,29 @@ pub fn compile_stat<'a>(stat: ast::Stat<'a>, code: &mut impl Code<'a>){
             );
         },
         FuncDecl(funcname, funcbody) => {
-            if funcname.other_name_components.len() > 0 {
-                panic!("other name components not yet done");
-            }
-            if funcname.method_component.is_some(){
-                panic!("Method comp not yet done");
-            }
-            push_func(funcbody, code);
-            code.emit(
-                BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(funcname.first_name_component.clone()),
-		None
-            );
+            push_func(funcbody, funcname.method_component.is_some(), code);
+	    // if this is a method (like "function elt:x(...)") then we need to assign the function to elt
+	    // if not we just assign to the base name
+	    let assignment_target = match funcname.other_name_components.len() {
+		0 => match funcname.method_component {
+		    // function f
+		    None => ast::Var::N(funcname.first_name_component, funcname.loc),
+		    // function f:attrname
+		    Some(attrname) => ast::Var::DotAccess(
+			ast::Prefixexpr {
+			    prefix: ast::Prefix::Varname(funcname.first_name_component, funcname.loc),
+			    suffixes: vec![],
+			},
+			attrname
+		    )
+		},
+		_ => {
+		    dbg!(funcname);
+		    panic!("No support for other components yet");
+		}
+	    }; 
+
+	    push_var_assignment(assignment_target, code);
         },
         For(name, start_value, limit, maybe_step, block) => {
             push_expr(start_value, code);
@@ -502,7 +515,10 @@ pub fn push_expr<'a>(expr: ast::Expr<'a>, code: &mut impl Code<'a>){
             BC::PUSH_STRING(s.to_string(), ),
 	    Some(loc),
         ),
-        Ellipsis(_loc) => panic!("No ellipsis support yet"),
+        Ellipsis(loc) => code.emit(
+	    BC::PUSH_ELLIPSIS,
+	    Some(loc)
+	),
         BinOp(left, op, right) => {
             // here we need to push the left and right expressions
             // then evaluate the operator
@@ -527,7 +543,7 @@ pub fn push_expr<'a>(expr: ast::Expr<'a>, code: &mut impl Code<'a>){
             push_table(ctr, code);
         },
         Functiondef(funcbody) => {
-            push_func(funcbody, code);
+            push_func(funcbody, false, code);
         }
     }
 }
@@ -542,29 +558,50 @@ pub fn new_code_obj<'a>() -> CodeObj<'a>{
     }
 }
 
-pub fn push_func<'a>(body: ast::Funcbody<'a>, code: &mut impl Code<'a>){
+pub fn push_func<'a>(body: ast::Funcbody<'a>, has_colon: bool, code: &mut impl Code<'a>){
     // take a function body and register the op codes to push it to the stack
     // we'll need to build up a code object for this body to represent in the
     // bytecode as well
+    //
+    // (if a colon is provided via the has_colon bit, we add a self parameter to the parameters)
     let mut inner_code = new_code_obj();
     // this inner code object will hold our body 
     compile_block(body.body, &mut inner_code);
 
     let code_index = code.write_inner_code(inner_code);
     code.emit(BC::PUSH_CODE_INDEX(code_index), None);
-    push_parlist(&body.parlist, code);
+    push_parlist(&body.parlist, has_colon, code);
     // this takes the parlist and the code index 
     // and builds a function from it
     code.emit(BC::BUILD_FUNCTION, None);
 }
 
-pub fn push_parlist<'a>(maybe_parlist: &Option<ast::Parlist>, code: &mut impl Code<'a>){
+pub fn push_parlist<'a>(maybe_parlist: &Option<ast::Parlist>, with_self: bool, code: &mut impl Code<'a>){
+    // push up a parameter list
+    // with_self indicates whethert to add an implicit self
     match maybe_parlist {
-        None => code.emit(BC::PUSH_NIL, None),
+        None => {
+	    match with_self {
+		True => code.emit(
+		    BC::PUSH_NAMELIST(
+			vec!["self".to_string()],
+			false,
+		    ),
+		    None
+		),
+		False => code.emit(BC::PUSH_NIL, None)
+	    }
+	},
         Some(parlist) => {
+	    let mut final_namelist = parlist.namelist.clone();
+	    if with_self {
+		// put self in the front, basically
+		final_namelist.push("self".to_string());
+		final_namelist.rotate_right(1);
+	    }
             code.emit(
                 BC::PUSH_NAMELIST(
-                    parlist.namelist.clone(),
+		    final_namelist,
                     parlist.has_ellipsis,
                 ),
 		None
