@@ -146,9 +146,9 @@ pub enum RunResult {
 
 #[allow(dead_code, unused_variables)]
 pub fn run_to_checkpoint(state: LuaRunState) -> RunResult {
-    /*
-     * Do Stuff and return a result
-     */
+    /**
+     * Run the runstate until we reach a suspension checkpoint
+     **/
     return RunResult::Error(String::from("Yikes"));
 }
 

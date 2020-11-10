@@ -10,8 +10,12 @@ use compile::{
 use natives::binops::*;
 
 pub enum ExecResult {
+    // there was some error in the process
     Error(String),
+    // we yielded some result to be unwrapped
     Yield(String),
+    // we are actually done and ther is nothing else to do
+    Done(String),
 }
 
 
@@ -65,9 +69,19 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 	}
     }
 
+    let bytecode_length = s.current_frame.code.bytecode.len();
+    
     loop {
         // let's get the next bytecode instruction to run
         let bc = s.current_frame.pc;
+	if bc >= bytecode_length {
+	    if bc == bytecode_length {
+		return ExecResult::Done("Execution finished".to_string());
+	    } else {
+		// if the execution gets here something has massively gone wrong
+		return ExecResult::Error("Bytecode out of bounds".to_string());
+	    }
+	}
         let next_instruction = &s.current_frame.code.bytecode[bc].clone();
 
 	// we use this to confirm we're doing the right thing in the code

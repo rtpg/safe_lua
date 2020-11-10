@@ -582,14 +582,14 @@ pub fn push_parlist<'a>(maybe_parlist: &Option<ast::Parlist>, with_self: bool, c
     match maybe_parlist {
         None => {
 	    match with_self {
-		True => code.emit(
+		true => code.emit(
 		    BC::PUSH_NAMELIST(
 			vec!["self".to_string()],
 			false,
 		    ),
 		    None
 		),
-		False => code.emit(BC::PUSH_NIL, None)
+		false => code.emit(BC::PUSH_NIL, None)
 	    }
 	},
         Some(parlist) => {

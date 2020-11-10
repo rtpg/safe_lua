@@ -47,11 +47,20 @@ pub fn lua_assert(_s: &LuaRunState, args: Option<LV>) -> LV {
 	}
     }
 }
+
+pub fn lua_fmt_for_print(arg: LV) -> String {
+    match arg {
+	LV::LuaS(s) => s,
+	_ => {
+	    println!("CALLED LUA PRINT ON UNSUPPORTED {}", arg);
+	    "UNKNOWN_VALUE_FOR_PRINT".to_string()
+	}
+    }
+}
 pub fn lua_print(_s: &LuaRunState, args: Option<LV>) -> LV {
-    println!("CALLED LUA PRINT");
     match unwrap_single_arg(args){
 	Some(arg) => {
-	    dbg!(arg);
+	    println!("{}", lua_fmt_for_print(arg));
 	    return LV::LuaNil;
 	},
 	None => {
