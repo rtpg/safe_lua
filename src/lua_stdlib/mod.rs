@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 
 
-pub fn stdlib() -> HashMap<String, LV> {
+pub fn stdlib<'a>() -> HashMap<String, LV<'a>> {
     // all the standard lib stuff
     let mut lib = HashMap::new();
     lib.insert(
@@ -16,7 +16,7 @@ pub fn stdlib() -> HashMap<String, LV> {
 }
 
 
-pub fn debug_mod() -> LV {
+pub fn debug_mod<'a>() -> LV<'a> {
     return LV::LuaTable {
 	v: HashMap::new()
     };

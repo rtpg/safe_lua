@@ -13,8 +13,13 @@ use ast::Name;
 #[derive(Clone, Debug)]
 #[must_use="Consume any jump targets"]
 pub enum JumpTarget {
+    // this is a jump to another part of the frame
     CodeLoc(usize),
+    // this is a forward reference to some other location
     JumpTable(usize),
+    // this is indicating that we have an inner function call
+    // as the next pc targe
+    InnerFuncCall(),
 }
 
 
@@ -214,6 +219,9 @@ impl<'a> Code<'a> for CodeObj<'a> {
                 let loc = self.bytecode.len() - 1;
                 self.jump_target[i] = Some(loc);
             }
+	    _ => {
+		panic!("Unsupported jump emit");
+	    }
         }
     }
     fn write_inner_code(&mut self, code: CodeObj<'a>) -> usize {

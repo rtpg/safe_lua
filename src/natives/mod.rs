@@ -31,7 +31,7 @@ fn unwrap_single_arg(args: Option<LV>) -> Option<LV> {
 	}
     }
 }
-pub fn lua_assert(_s: &LuaRunState, args: Option<LV>) -> LV {
+pub fn lua_assert<'a>(_s: &LuaRunState, args: Option<LV>) -> LV<'a> {
     match unwrap_single_arg(args){
 	Some(arg) => {
 	    match arg {
@@ -57,7 +57,7 @@ pub fn lua_fmt_for_print(arg: LV) -> String {
 	}
     }
 }
-pub fn lua_print(_s: &LuaRunState, args: Option<LV>) -> LV {
+pub fn lua_print<'a>(_s: &LuaRunState, args: Option<LV>) -> LV<'a> {
     match unwrap_single_arg(args){
 	Some(arg) => {
 	    println!("{}", lua_fmt_for_print(arg));
@@ -69,7 +69,7 @@ pub fn lua_print(_s: &LuaRunState, args: Option<LV>) -> LV {
     }
 }
 
-pub fn lua_require(s: &LuaRunState, args: Option<LV>) -> LV {
+pub fn lua_require<'a>(s: &LuaRunState<'a>, args: Option<LV>) -> LV<'a> {
     match unwrap_single_arg(args) {
 	Some(arg) => {
 	    match arg {

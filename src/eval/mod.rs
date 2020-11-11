@@ -22,19 +22,20 @@ const DBG_POP_PUSH: bool = false;
 
 // our Lua values
 #[derive(Clone)]
-pub enum LV {
+pub enum LV<'a> {
     Num(f64),
     LuaS(String),
-    LuaList(Vec<LV>),
+    LuaList(Vec<LV<'a>>),
     LuaTable {
-	v: HashMap<String, LV>
+	v: HashMap<String, LV<'a>>
     },
     NativeFunc {
 	name: String,
-	f: fn(&LuaRunState, Option<LV>) -> LV
+	f: fn(&LuaRunState<'a>, Option<LV>) -> LV<'a>
     },
     LuaFunc {
 	code_idx: usize,
+	code: Rc<CodeObj<'a>>,
 	args: ast::Namelist,
 	ellipsis: bool,
     },
@@ -43,6 +44,8 @@ pub enum LV {
     // and I think I need to be careful here
     // this value shouldn't leak normally
     CodeIndex(usize),
+    // this is the actual code object
+    Code(Rc<CodeObj<'a>>),
     // namelist. lazy
     NameList(ast::Namelist, bool),
     LuaNil,
@@ -71,7 +74,7 @@ fn lv_fmt(lv: &LV, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 	LuaTable{v:t} => {
 	    f.debug_struct("LuaTable").field("v", t).finish()
 	},
-	LuaFunc {code_idx, args, ellipsis: _ellipsis} => {
+	LuaFunc {code_idx, args, ..} => {
 	  f.debug_struct("LuaFunc").field("code_idx", code_idx).field("args", args).finish()  
 	},
 	NativeFunc {name, f: _} => {
@@ -94,23 +97,23 @@ fn lv_fmt(lv: &LV, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 	}
     }
 }
-impl std::fmt::Debug for LV {
+impl<'a> std::fmt::Debug for LV<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 	lv_fmt(self, f)
     }
 }
-impl std::fmt::Display for LV {
+impl<'a> std::fmt::Display for LV<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 	lv_fmt(self, f)
     }
 }
 
-pub struct LuaValueStack {
-    values: Vec<LV>,
+pub struct LuaValueStack<'a> {
+    values: Vec<LV<'a>>,
 }
 
-pub struct LuaEnv{
-    values: HashMap<String, LV>
+pub struct LuaEnv<'a> {
+    values: HashMap<String, LV<'a>>
 }
 
 pub struct LuaFrame<'a>{
@@ -119,8 +122,16 @@ pub struct LuaFrame<'a>{
     // execute whatever needs to be executed
     code: Rc<CodeObj<'a>>, // the code itself
     pc: usize, // program counter
-    stack: LuaValueStack, // value stack
-    env: LuaEnv 
+    stack: LuaValueStack<'a>, // value stack
+    env: LuaEnv<'a>
+}
+
+impl<'a> LuaFrame<'a> {
+    fn assign_args(&mut self, arglist: Vec<String>, args: LV){
+	// we want to take every argument in the arglist and set it into the environment
+	// as locals
+	panic!("Implement assigning args");
+    }
 }
 
 #[allow(dead_code)]
@@ -134,9 +145,28 @@ pub struct LuaRunState<'a> {
     current_frame: LuaFrame<'a>,
     // stack of frames (doesn't include existing frame)
     frame_stack: Vec<LuaFrame<'a>>,
-    pub packages: HashMap<String, LV>,
+    pub packages: HashMap<String, LV<'a>>,
 }
 
+impl<'a> LuaRunState<'a> {
+    fn enter_function_call(&mut self, func: LV, provided_args: LV) {
+	// set up a new lua frame as the top level func and work from there
+	match func {
+	    LV::LuaFunc {..} => {
+		
+		panic!("TODO: implement function call entering");
+	    },
+	    _ => {
+		panic!("Received a non-func to enter");
+	    }
+	}
+    }
+
+    fn return_from_funccall(&mut self) {
+	// set up the return of the func call in the above frame and then execute further
+	panic!("TODO: implement func returns");
+    }
+}
 #[allow(dead_code)]
 #[derive(PartialEq,Debug)]
 pub enum RunResult {
@@ -146,14 +176,11 @@ pub enum RunResult {
 
 #[allow(dead_code, unused_variables)]
 pub fn run_to_checkpoint(state: LuaRunState) -> RunResult {
-    /**
-     * Run the runstate until we reach a suspension checkpoint
-     **/
     return RunResult::Error(String::from("Yikes"));
 }
 
-pub fn global_env() -> LuaEnv {
-    let globals: Vec<(String, LV)> = vec![
+pub fn global_env<'a>() -> LuaEnv<'a> {
+    let globals: Vec<(String, LV<'a>)> = vec![
 	("print".to_string(), LV::NativeFunc {
 	    name: "print".to_string(),
 	    f: lua_print

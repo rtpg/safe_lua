@@ -2,7 +2,7 @@ use eval::LuaExc;
 use eval::LV;
 use eval::LV::*;
 
-pub fn lua_binop_eq(l: &LV, r: &LV) -> LV {
+pub fn lua_binop_eq<'a>(l: &LV, r: &LV) -> LV<'a> {
     if lua_binop_eq_impl(l, r) {
 	return LuaTrue
     } else {
@@ -31,7 +31,7 @@ pub fn lua_binop_eq_impl(l: &LV, r: &LV) -> bool {
     }
 }
 
-pub fn lua_exponent_eq(l: &LV, r: &LV) -> Result<LV, LuaExc> {
+pub fn lua_exponent_eq<'a>(l: &LV, r: &LV) -> Result<LV<'a>, LuaExc> {
     match l {
 	Num(ll) => {
 	    match r {

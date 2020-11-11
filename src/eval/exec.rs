@@ -19,7 +19,7 @@ pub enum ExecResult {
 }
 
 
-fn print_and_push(stack: &mut LuaValueStack, val: LV) {
+fn print_and_push<'a>(stack: &mut LuaValueStack<'a>, val: LV<'a>) {
     if DBG_POP_PUSH {
 	println!("PUSH => {}", val);
     }
@@ -57,11 +57,11 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 	}
     }
 
-    fn push(s: &mut LuaRunState, v: LV) {
+    fn push<'a>(s: &mut LuaRunState<'a>, v: LV<'a>) {
 	print_and_push(&mut s.current_frame.stack, v);
     }
     
-    fn peek<'a>(s: &'a LuaRunState<'_>) -> &'a LV {
+    fn peek<'a, 'b>(s: &'a LuaRunState<'b>) -> &'a LV<'b> {
 	let len = s.current_frame.stack.values.len() - 1;
 	match &s.current_frame.stack.values.get(len) {
 	    Some(v) => v, // TODO noclone
@@ -69,9 +69,8 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 	}
     }
 
-    let bytecode_length = s.current_frame.code.bytecode.len();
-    
     loop {
+	let bytecode_length = s.current_frame.code.bytecode.len();
         // let's get the next bytecode instruction to run
         let bc = s.current_frame.pc;
 	if bc >= bytecode_length {
@@ -133,6 +132,7 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 		push(s, LV::Num(*n))
 	    },
 	    BC::PUSH_CODE_INDEX(n) => {
+		panic!("HERE WE SHOULD PUT THE CODE OBJECT INSTEAD OF THE INDEX");
 		push(s, LV::CodeIndex(*n))
 	    },
 	    BC::ASSIGN_NAME(n) => {
@@ -275,6 +275,14 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 			let return_value = f(s, Some(args));
 			push(s, return_value);
 		    },
+		    LV::LuaFunc {..} => {
+			// we queue up the new frame to continue executing
+			// we also want to indicate that we want to shift the pc forward one
+			// the return will set the return value on the satck of the frame later
+			// s.enter_function_call(m_func, provided_args);
+			intended_next_pc = Some(JumpTarget::InnerFuncCall());
+			println!("TODO IMPLEMENT");
+		    },
 		    _ => {
 			dbg!(m_func);
 			panic!("Got a non-func to call!");
@@ -305,6 +313,14 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 				panic!("Failed jump table lookup");
 			    }
 			}
+		    },
+		    JumpTarget::InnerFuncCall() => {
+			// at this point we have already fixed up the current frame
+			// so that it's the "right one"
+			// however the frame before this one still needs to get its program
+			// counter shifted inwards by one
+			let l = s.frame_stack.len() - 1;
+			s.frame_stack[l].pc += 1;
 		    }
 		}
 	    },
