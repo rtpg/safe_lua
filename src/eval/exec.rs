@@ -115,7 +115,8 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 		push(s, LV::LuaFalse);
 	    },
 	    BC::PUSH_VAL_BY_NAME(val) => {
-		let v1 = s.current_frame.env.values.get(val);
+		let env = s.current_frame.env.borrow_mut();
+		let v1 = env.values.get(val);
 		match v1 {
 		    Some(v) => {
 			let v_clone = v.clone();
@@ -139,7 +140,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 	    },
 	    BC::ASSIGN_NAME(n) => {
 		let val = pop!();
-		s.current_frame.env.values.insert(
+		s.current_frame.env.borrow_mut().values.insert(
 		    n.to_string(),
 		    val
 		);
@@ -182,6 +183,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 			    }
 			}
 		    },
+		    "<=" => lua_binop_leq(&l, &r),
 		    _ => {
 			dbg!(binop);
 			panic!("Unknown binop");
@@ -195,7 +197,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 			match l.get(*sz) {
 			    Some(v) => {
 				let v_clone = v.clone();
-				s.current_frame.env.values.insert(
+				s.current_frame.env.borrow_mut().values.insert(
 				    name.clone(),
 				    v_clone
 				);
@@ -225,7 +227,8 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 				code_idx: *idx,
 				code: code.clone(),
 				args: nl.to_vec(),
-				ellipsis: *ellipsis
+				ellipsis: *ellipsis,
+				env: s.current_frame.env,
 			    }
 			)
 		    },
@@ -238,7 +241,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 	    },
 	    BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(name) => {
 		let val = pop!();
-		s.current_frame.env.values.insert(
+		s.current_frame.env.borrow_mut().values.insert(
 		    name.to_string(),
 		    val
 		);
@@ -283,9 +286,8 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 			// we queue up the new frame to continue executing
 			// we also want to indicate that we want to shift the pc forward one
 			// the return will set the return value on the satck of the frame later
-			// s.enter_function_call(m_func, provided_args);
+			s.enter_function_call(m_func, args);
 			intended_next_pc = Some(JumpTarget::InnerFuncCall());
-			panic!("TODO IMPLEMENT");
 		    },
 		    _ => {
 			dbg!(m_func);
@@ -323,7 +325,6 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 			// so that it's the "right one"
 			// however the frame before this one still needs to get its program
 			// counter shifted inwards by one
-			panic!("TODO FIX FRAME STACK ALLOCATION");
 			let l = s.frame_stack.len() - 1;
 			s.frame_stack[l].pc += 1;
 		    }

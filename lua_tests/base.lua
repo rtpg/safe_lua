@@ -3,7 +3,7 @@ print "Hi there";
 print "OK";
 
 local function foo(n)
-   if i <= 2 then return 1;
+   if n <= 2 then return 1;
    else return foo(n-1) + foo(n-1);
    end;
 end;

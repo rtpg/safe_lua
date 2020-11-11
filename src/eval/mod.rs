@@ -1,6 +1,7 @@
 #[macro_use]
 #[allow(dead_code)]
 pub mod exec;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use parse::parse;
 use super::ast;
@@ -38,6 +39,7 @@ pub enum LV<'a> {
 	code: Rc<CodeObj<'a>>,
 	args: ast::Namelist,
 	ellipsis: bool,
+	env: Rc<RefCell<LuaEnv<'a>>>,
     },
     // INTERNAL VALUES 
     // This code index value is just becauze I have usize
@@ -111,14 +113,23 @@ impl<'a> std::fmt::Display for LV<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct LuaValueStack<'a> {
     values: Vec<LV<'a>>,
 }
 
+#[derive(Clone)]
 pub struct LuaEnv<'a> {
     values: HashMap<String, LV<'a>>
 }
 
+impl<'a> LuaEnv<'a> {
+    fn set(&mut self, name: String, val: LV<'a>){
+	self.values.insert(name, val);
+    }
+}
+
+#[derive(Clone)]
 pub struct LuaFrame<'a>{
     // This is a single frame, that includes the environment etc
     // calling into another function will build a frame that will
@@ -126,14 +137,28 @@ pub struct LuaFrame<'a>{
     code: Rc<CodeObj<'a>>, // the code itself
     pc: usize, // program counter
     stack: LuaValueStack<'a>, // value stack
-    env: LuaEnv<'a>
+    env: Rc<RefCell<LuaEnv<'a>>>
 }
 
 impl<'a> LuaFrame<'a> {
-    fn assign_args(&mut self, arglist: Vec<String>, args: LV){
+    fn assign_args(&mut self, arglist: Vec<String>, args: LV<'a>){
 	// we want to take every argument in the arglist and set it into the environment
 	// as locals
-	panic!("Implement assigning args");
+	match args {
+	    LV::LuaList(list) => {
+		if arglist.len() != list.len() {
+		    panic!("TODO implement different argument arity on function pass");
+		}
+		// assign the value to each name into the stack
+		for (name, val) in arglist.iter().zip(list) {
+		    self.env.borrow_mut().set(name.to_string(), val);
+		}
+	    },
+	    _ => {
+		dbg!(args);
+		panic!("Received wrong args the other day");
+	    }
+	}
     }
 }
 
@@ -152,12 +177,19 @@ pub struct LuaRunState<'a> {
 }
 
 impl<'a> LuaRunState<'a> {
-    fn enter_function_call(&mut self, func: LV, provided_args: LV) {
+    fn enter_function_call(&mut self, func: LV<'a>, provided_args: LV<'a>) {
 	// set up a new lua frame as the top level func and work from there
 	match func {
-	    LV::LuaFunc {..} => {
-		
-		panic!("TODO: implement function call entering");
+	    LV::LuaFunc {code, args, ellipsis, ..} => {
+		if ellipsis {
+		    panic!("TODO implement ellipsis function calls");
+		}
+		let mut new_frame = frame_from_code(code);
+		new_frame.assign_args(args, provided_args);
+		// let's get this new frame set up
+		// TODO noclone
+		self.frame_stack.push(self.current_frame.clone());
+		self.current_frame = new_frame;
 	    },
 	    _ => {
 		panic!("Received a non-func to enter");
@@ -211,7 +243,7 @@ pub fn frame_from_code(code:Rc<CodeObj>) -> LuaFrame {
         stack: LuaValueStack {
             values: vec![]
         },
-	env: global_env()
+	env: Rc::new(RefCell::new(global_env()))
     }
 }
 
