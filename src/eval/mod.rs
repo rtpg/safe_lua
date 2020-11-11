@@ -94,6 +94,9 @@ fn lv_fmt(lv: &LV, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 	},
 	LuaFalse => {
 	    f.debug_struct("False").finish()
+	},
+	Code(_) => {
+	    f.debug_struct("<Code Object>").finish()
 	}
     }
 }

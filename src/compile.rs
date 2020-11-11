@@ -3,6 +3,7 @@
  * a bunch of lex tokens into a list of bytecode
  * operations
  */
+use std::rc::Rc;
 use nom_locate::LocatedSpan;
 use ast;
 use lex;
@@ -157,7 +158,7 @@ pub struct CodeObj<'a> {
     pub sourcemap: Sourcemap<'a>,
     // references to other code blocks
     // (for example code blocks for funciton definitions)
-    inner_code: Vec<CodeObj<'a>>,
+    inner_code: Vec<Rc<CodeObj<'a>>>,
     // positions in the bytecode for jump labels
     labels: HashMap<String, usize>,
     // jump targets, used for looping etc
@@ -165,6 +166,11 @@ pub struct CodeObj<'a> {
     pub jump_target: Vec<Option<usize>>,
 }
 
+impl<'a> CodeObj<'a> {
+    pub fn lookup_code_by_idx<'b>(&'b self, idx: usize) -> Rc<CodeObj<'a>> {
+	return self.inner_code[idx].clone();
+    }
+}
 
 pub trait Code<'a> {
     // emit bytecode
@@ -226,7 +232,7 @@ impl<'a> Code<'a> for CodeObj<'a> {
     }
     fn write_inner_code(&mut self, code: CodeObj<'a>) -> usize {
         // TODO is this safe?
-        self.inner_code.push(code);
+        self.inner_code.push(Rc::new(code));
         // TODO not sure if this is the right thing to return either
         return self.inner_code.len() - 1;
     }

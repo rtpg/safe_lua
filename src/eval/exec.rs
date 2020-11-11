@@ -41,7 +41,7 @@ macro_rules! vm_panic {
     }
 }
 
-pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> ExecResult {
+pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Option<u8>) -> ExecResult {
     // Move the machine forward until we hit the next yield
     macro_rules! pop {
 	() => {
@@ -132,8 +132,10 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 		push(s, LV::Num(*n))
 	    },
 	    BC::PUSH_CODE_INDEX(n) => {
-		panic!("HERE WE SHOULD PUT THE CODE OBJECT INSTEAD OF THE INDEX");
-		push(s, LV::CodeIndex(*n))
+		let code_obj = s.current_frame.code.lookup_code_by_idx(*n);
+		push(s, LV::Code(code_obj));
+		// probably don't need this...
+		push(s, LV::CodeIndex(*n));
 	    },
 	    BC::ASSIGN_NAME(n) => {
 		let val = pop!();
@@ -214,12 +216,14 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 	    BC::BUILD_FUNCTION => {
 		let namelist = pop!();
 		let code_idx = pop!();
-		match (&namelist, &code_idx) {
-		    (LV::NameList(nl, ellipsis), LV::CodeIndex(idx)) => {
+		let code = pop!();
+		match (&namelist, &code_idx, &code) {
+		    (LV::NameList(nl, ellipsis), LV::CodeIndex(idx), LV::Code(code)) => {
 			push(
 			    s,
 			    LV::LuaFunc {
 				code_idx: *idx,
+				code: code.clone(),
 				args: nl.to_vec(),
 				ellipsis: *ellipsis
 			    }
@@ -281,7 +285,7 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 			// the return will set the return value on the satck of the frame later
 			// s.enter_function_call(m_func, provided_args);
 			intended_next_pc = Some(JumpTarget::InnerFuncCall());
-			println!("TODO IMPLEMENT");
+			panic!("TODO IMPLEMENT");
 		    },
 		    _ => {
 			dbg!(m_func);
@@ -319,6 +323,7 @@ pub fn exec_to_next_yield(s: &mut LuaRunState, _yield_result: Option<u8>) -> Exe
 			// so that it's the "right one"
 			// however the frame before this one still needs to get its program
 			// counter shifted inwards by one
+			panic!("TODO FIX FRAME STACK ALLOCATION");
 			let l = s.frame_stack.len() - 1;
 			s.frame_stack[l].pc += 1;
 		    }
