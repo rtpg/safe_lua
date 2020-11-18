@@ -2,11 +2,13 @@ use compile::CodeObj;
 use std::convert::TryInto;
 
 pub fn display_code_block<'a>(obj: CodeObj<'a>){
-    println!("BYTES\n==========");
+    // improvement possibilities
+    // display the source file
+    // display inner function stuff (like when building up)
+    println!(" BYTES\n==========");
     // this value is to keep track of which line ew have printed so far
     let mut prev_line = 0;
     for (bc_idx, elt) in obj.bytecode.iter().enumerate() {
-	println!("{:?}", elt);
 	let loc = obj.sourcemap.get_location(bc_idx);
 	let loc_line: usize = loc.location_line().try_into().unwrap();
 	let display_line = loc_line > prev_line;
@@ -22,5 +24,4 @@ pub fn display_code_block<'a>(obj: CodeObj<'a>){
 	    println!(" {:?}", elt);
 	}
     }
-    println!("Insert bytecode display here");
 }

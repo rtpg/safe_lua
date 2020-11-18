@@ -152,7 +152,15 @@ impl<'a> Sourcemap<'a> {
 
     pub fn get_location(&self, bytecode_position: usize) -> LocatedSpan<&str> {
 	// take the bytecode position and get
-	return self.map_data[bytecode_position];
+	match self.map_data.get(bytecode_position) {
+	    Some(loc) => *loc,
+	    None => {
+		// basically this gets called on the lines at the end of a trace, so just
+		// return the last one
+		// (this is hacky and dumb)
+		self.map_data[self.map_data.len()-1]
+	    }
+	}
     }
     pub fn get_line(&self, source_line: usize) -> &'a str{
 	match self.source_by_line.get(source_line) {
