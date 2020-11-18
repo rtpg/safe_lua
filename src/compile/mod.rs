@@ -3,6 +3,8 @@
  * a bunch of lex tokens into a list of bytecode
  * operations
  */
+pub mod display;
+
 use std::rc::Rc;
 use nom_locate::LocatedSpan;
 use ast;
@@ -118,13 +120,18 @@ pub enum BC {
 pub struct Sourcemap<'a> {
     // this struct stores sourcemap information "nicely" (at least in theory)
     // later: make this more performant/space friendly
-    map_data: Vec<LocatedSpan<&'a str>>
+    map_data: Vec<LocatedSpan<&'a str>>,
+    original_source: &'a str,
+    // this lets us quickly get a line
+    source_by_line: Vec<&'a str>,
 }
 
 impl<'a> Sourcemap<'a> {
-    pub fn new() -> Sourcemap<'a>{
+    pub fn new(original_source: &'a str) -> Sourcemap<'a>{
 	return Sourcemap {
-	    map_data: vec![]
+	    map_data: vec![],
+	    original_source: original_source,
+	    source_by_line: original_source.split("\n").collect(),
 	}
     }
     pub fn write_map(&mut self, bytecode_position: usize, location: LocatedSpan<&'a str>){
@@ -146,6 +153,12 @@ impl<'a> Sourcemap<'a> {
     pub fn get_location(&self, bytecode_position: usize) -> LocatedSpan<&str> {
 	// take the bytecode position and get
 	return self.map_data[bytecode_position];
+    }
+    pub fn get_line(&self, source_line: usize) -> &'a str{
+	match self.source_by_line.get(source_line) {
+	    Some(txt) => txt,
+	    None => "OUT OF BOUNDS SOURCEMAP",
+	}
     }
 }
 // code objects
@@ -562,10 +575,10 @@ pub fn push_expr<'a>(expr: ast::Expr<'a>, code: &mut impl Code<'a>){
     }
 }
 
-pub fn new_code_obj<'a>() -> CodeObj<'a>{
+pub fn new_code_obj<'a>(original_source: &'a str) -> CodeObj<'a>{
     return CodeObj {
         bytecode: Vec::new(),
-	sourcemap: Sourcemap::new(),
+	sourcemap: Sourcemap::new(original_source),
         inner_code: Vec::new(),
         labels: HashMap::new(),
         jump_target: Vec::new(),
@@ -578,7 +591,7 @@ pub fn push_func<'a>(body: ast::Funcbody<'a>, has_colon: bool, code: &mut impl C
     // bytecode as well
     //
     // (if a colon is provided via the has_colon bit, we add a self parameter to the parameters)
-    let mut inner_code = new_code_obj();
+    let mut inner_code = new_code_obj("CONTENTS GOTTEN IN PUSH FUNC AND ARE WRONG");
     // this inner code object will hold our body 
     compile_block(body.body, &mut inner_code);
 
@@ -867,8 +880,8 @@ pub fn compile_block<'a>(b: ast::Block<'a>, code: &mut impl Code<'a>) {
         }
     }
 }
-pub fn compile<'a>(parsed_block: ast::Block<'a>) -> CodeObj<'a> {
-    let mut code = new_code_obj();
+pub fn compile<'a>(parsed_block: ast::Block<'a>, contents: &'a str) -> CodeObj<'a> {
+    let mut code = new_code_obj(contents);
     compile_block(parsed_block, &mut code);
     return code;
 }

@@ -250,7 +250,7 @@ pub fn frame_from_code(code:Rc<CodeObj>) -> LuaFrame {
 pub fn initial_run_state<'a>(contents: &'a str, lua_file_path: &'a str) -> LuaRunState<'a> {
 
     let parsed_content = parse(contents);
-    let compiled_code = compile(parsed_content);
+    let compiled_code = compile(parsed_content, contents);
     let boxed_code = Rc::new(compiled_code);
     return LuaRunState {
         file_path: String::from(lua_file_path),

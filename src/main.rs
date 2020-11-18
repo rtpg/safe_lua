@@ -24,6 +24,8 @@ mod utils;
 struct MainOpts {
     #[argh(positional, description="the script to run")]
     script: String,
+    #[argh(switch, description="just show me the bytecode")]
+    bytecode: bool,
 }
 
 
@@ -43,22 +45,27 @@ fn main(){
     let parse_result = parse::parse(&contents);
 
     println!("starting compile");
-    let compile_result = compile::compile(parse_result);
+    let compile_result = compile::compile(parse_result, &contents);
 
-    let mut run_state = eval::initial_run_state(&contents, &filepath);
-    // for now we're just going to loop over our yielding mechanisms
-    loop {
-	use eval::exec::ExecResult::*;
-	match eval::exec::exec_to_next_yield(&mut run_state, None) {
-	    Done(s) => {
-		println!("Exit code was: {}", s);
-		break;
-	    },
-	    Error(s) => {
-		println!("Error on execution: {}", s);
-	    },
-	    Yield(s) => {
-		panic!("TODO: implement yield handling. Yielded {}", s);
+    if opts.bytecode {
+	// we're only going to show the compilation result
+	compile::display::display_code_block(compile_result);
+    } else {
+	let mut run_state = eval::initial_run_state(&contents, &filepath);
+	// for now we're just going to loop over our yielding mechanisms
+	loop {
+	    use eval::exec::ExecResult::*;
+	    match eval::exec::exec_to_next_yield(&mut run_state, None) {
+		Done(s) => {
+		    println!("Exit code was: {}", s);
+		    break;
+		},
+		Error(s) => {
+		    println!("Error on execution: {}", s);
+		},
+		Yield(s) => {
+		    panic!("TODO: implement yield handling. Yielded {}", s);
+		}
 	    }
 	}
     }

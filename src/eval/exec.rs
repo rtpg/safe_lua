@@ -220,18 +220,18 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 		let code_idx = pop!();
 		let code = pop!();
 		match (&namelist, &code_idx, &code) {
-		    (LV::NameList(nl, ellipsis), LV::CodeIndex(idx), LV::Code(code)) => {
+		    (LV::NameList(_nl, _ellipsis), LV::CodeIndex(_idx), LV::Code(_code)) => {
 			panic!("Implement proper env stuff");
-			push(
-			    s,
-			    LV::LuaFunc {
-				code_idx: *idx,
-				code: code.clone(),
-				args: nl.to_vec(),
-				ellipsis: *ellipsis,
-				env: s.current_frame.env,
-			    }
-			)
+			// push(
+			//     s,
+			//     LV::LuaFunc {
+			// 	code_idx: *idx,
+			// 	code: code.clone(),
+			// 	args: nl.to_vec(),
+			// 	ellipsis: *ellipsis,
+			// 	env: s.current_frame.env,
+			//     }
+			// )
 		    },
 		    _ => {
 			dbg!(namelist);
