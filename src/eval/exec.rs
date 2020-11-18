@@ -115,7 +115,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 		push(s, LV::LuaFalse);
 	    },
 	    BC::PUSH_VAL_BY_NAME(val) => {
-		let env = s.current_frame.env.borrow_mut();
+		let env = &s.current_frame.env;
 		let v1 = env.values.get(val);
 		match v1 {
 		    Some(v) => {
@@ -140,7 +140,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 	    },
 	    BC::ASSIGN_NAME(n) => {
 		let val = pop!();
-		s.current_frame.env.borrow_mut().values.insert(
+		s.current_frame.env.values.insert(
 		    n.to_string(),
 		    val
 		);
@@ -197,7 +197,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 			match l.get(*sz) {
 			    Some(v) => {
 				let v_clone = v.clone();
-				s.current_frame.env.borrow_mut().values.insert(
+				s.current_frame.env.values.insert(
 				    name.clone(),
 				    v_clone
 				);
@@ -221,6 +221,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 		let code = pop!();
 		match (&namelist, &code_idx, &code) {
 		    (LV::NameList(nl, ellipsis), LV::CodeIndex(idx), LV::Code(code)) => {
+			panic!("Implement proper env stuff");
 			push(
 			    s,
 			    LV::LuaFunc {
@@ -241,7 +242,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 	    },
 	    BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(name) => {
 		let val = pop!();
-		s.current_frame.env.borrow_mut().values.insert(
+		s.current_frame.env.values.insert(
 		    name.to_string(),
 		    val
 		);

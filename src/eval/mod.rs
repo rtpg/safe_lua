@@ -1,7 +1,6 @@
 #[macro_use]
 #[allow(dead_code)]
 pub mod exec;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use parse::parse;
 use super::ast;
@@ -39,7 +38,7 @@ pub enum LV<'a> {
 	code: Rc<CodeObj<'a>>,
 	args: ast::Namelist,
 	ellipsis: bool,
-	env: Rc<RefCell<LuaEnv<'a>>>,
+	env: LuaEnv<'a>,
     },
     // INTERNAL VALUES 
     // This code index value is just becauze I have usize
@@ -137,7 +136,7 @@ pub struct LuaFrame<'a>{
     code: Rc<CodeObj<'a>>, // the code itself
     pc: usize, // program counter
     stack: LuaValueStack<'a>, // value stack
-    env: Rc<RefCell<LuaEnv<'a>>>
+    env: LuaEnv<'a>,
 }
 
 impl<'a> LuaFrame<'a> {
@@ -151,7 +150,7 @@ impl<'a> LuaFrame<'a> {
 		}
 		// assign the value to each name into the stack
 		for (name, val) in arglist.iter().zip(list) {
-		    self.env.borrow_mut().set(name.to_string(), val);
+		    self.env.set(name.to_string(), val);
 		}
 	    },
 	    _ => {
@@ -243,7 +242,7 @@ pub fn frame_from_code(code:Rc<CodeObj>) -> LuaFrame {
         stack: LuaValueStack {
             values: vec![]
         },
-	env: Rc::new(RefCell::new(global_env()))
+	env: global_env()
     }
 }
 
