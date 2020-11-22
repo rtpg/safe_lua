@@ -116,7 +116,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 	    },
 	    BC::PUSH_VAL_BY_NAME(val) => {
 		let env = &s.current_frame.env;
-		let v1 = env.values.get(val);
+		let v1 = env.get(val);
 		match v1 {
 		    Some(v) => {
 			let v_clone = v.clone();
@@ -140,7 +140,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 	    },
 	    BC::ASSIGN_NAME(n) => {
 		let val = pop!();
-		s.current_frame.env.values.insert(
+		s.current_frame.env.set(
 		    n.to_string(),
 		    val
 		);
@@ -184,6 +184,9 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 			}
 		    },
 		    "<=" => lua_binop_leq(&l, &r),
+		    "-" => lua_binop_minus(&l, &r),
+		    "+" => lua_binop_plus(&l, &r),
+		    "*" => lua_binop_times(&l, &r),
 		    _ => {
 			dbg!(binop);
 			panic!("Unknown binop");
@@ -197,7 +200,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 			match l.get(*sz) {
 			    Some(v) => {
 				let v_clone = v.clone();
-				s.current_frame.env.values.insert(
+				s.current_frame.env.set(
 				    name.clone(),
 				    v_clone
 				);
@@ -220,18 +223,17 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 		let code_idx = pop!();
 		let code = pop!();
 		match (&namelist, &code_idx, &code) {
-		    (LV::NameList(_nl, _ellipsis), LV::CodeIndex(_idx), LV::Code(_code)) => {
-			panic!("Implement proper env stuff");
-			// push(
-			//     s,
-			//     LV::LuaFunc {
-			// 	code_idx: *idx,
-			// 	code: code.clone(),
-			// 	args: nl.to_vec(),
-			// 	ellipsis: *ellipsis,
-			// 	env: s.current_frame.env,
-			//     }
-			// )
+		    (LV::NameList(nl, ellipsis), LV::CodeIndex(idx), LV::Code(code)) => {
+			push(
+			    s,
+			    LV::LuaFunc {
+				code_idx: *idx,
+				code: code.clone(),
+				args: nl.to_vec(),
+				ellipsis: *ellipsis,
+				parent_env: s.current_frame.env.clone(),
+			    }
+			)
 		    },
 		    _ => {
 			dbg!(namelist);
@@ -242,7 +244,8 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 	    },
 	    BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(name) => {
 		let val = pop!();
-		s.current_frame.env.values.insert(
+		
+		s.current_frame.env.set(
 		    name.to_string(),
 		    val
 		);
@@ -300,6 +303,10 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 		dbg!(err_msg);
 		panic!("Lua panic opcode");
 	    },
+	    BC::RETURN_VALUE => {
+		let return_value = pop!();
+		s.return_from_funccall(return_value);
+	    },
             _ => {
                 dbg!(next_instruction);
                 panic!("Unhandled Bytecode");
@@ -322,12 +329,6 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 			}
 		    },
 		    JumpTarget::InnerFuncCall() => {
-			// at this point we have already fixed up the current frame
-			// so that it's the "right one"
-			// however the frame before this one still needs to get its program
-			// counter shifted inwards by one
-			let l = s.frame_stack.len() - 1;
-			s.frame_stack[l].pc += 1;
 		    }
 		}
 	    },

@@ -51,6 +51,7 @@ pub fn lua_assert<'a>(_s: &LuaRunState, args: Option<LV>) -> LV<'a> {
 pub fn lua_fmt_for_print(arg: LV) -> String {
     match arg {
 	LV::LuaS(s) => s,
+	LV::Num(n) => n.to_string(),
 	_ => {
 	    println!("CALLED LUA PRINT ON UNSUPPORTED {}", arg);
 	    "UNKNOWN_VALUE_FOR_PRINT".to_string()

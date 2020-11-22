@@ -49,7 +49,7 @@ fn main(){
 
     if opts.bytecode {
 	// we're only going to show the compilation result
-	compile::display::display_code_block(compile_result);
+	compile::display::display_code_block(&compile_result);
     } else {
 	let mut run_state = eval::initial_run_state(&contents, &filepath);
 	// for now we're just going to loop over our yielding mechanisms

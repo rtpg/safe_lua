@@ -7,7 +7,7 @@ use nom_locate::LocatedSpan;
 fn test_sourcemaps(){
 
     let loc_0 = LocatedSpan::new("Location Zero");
-    let mut sm = Sourcemap::new();
+    let mut sm = Sourcemap::new("loc");
 
     sm.write_map(0, loc_0);
 

@@ -871,15 +871,23 @@ pub fn compile_block<'a>(b: ast::Block<'a>, code: &mut impl Code<'a>) {
                         
                         // this pushes exprlist.len() elements to stack
                         let exprlist_len = exprlist.len();
-                        for expr in exprlist.into_iter() {
-                            push_expr(expr, code);
-                        }
-                        // this pops exprlist.len() elements to the stack
-                        // then adds one
-                        code.emit(
-                            BC::BUILD_LIST(exprlist_len),
-			    None
-                        );
+			if exprlist.len() == 1 {
+			    // we'll do a simple return here
+			    push_expr(exprlist[0].clone(), code);
+			    
+			} else {
+			    // if we have multiple values we'll need to build up a
+			    // list on returning
+			    for expr in exprlist.into_iter() {
+				push_expr(expr, code);
+			    }
+			    // this pops exprlist.len() elements to the stack
+			    // then adds one
+			    code.emit(
+				BC::BUILD_LIST(exprlist_len),
+				None
+			    );
+			}
                         // this removes the last element
                         code.emit(BC::RETURN_VALUE, None);
                     }

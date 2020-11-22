@@ -1,6 +1,7 @@
 #[macro_use]
 #[allow(dead_code)]
 pub mod exec;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use parse::parse;
 use super::ast;
@@ -38,7 +39,7 @@ pub enum LV<'a> {
 	code: Rc<CodeObj<'a>>,
 	args: ast::Namelist,
 	ellipsis: bool,
-	env: LuaEnv<'a>,
+	parent_env: LuaEnv<'a>,
     },
     // INTERNAL VALUES 
     // This code index value is just becauze I have usize
@@ -112,19 +113,102 @@ impl<'a> std::fmt::Display for LV<'a> {
     }
 }
 
+impl<'a> PartialEq for LV<'a> {
+    
+    fn eq(&self, other: &LV<'a>) -> bool {
+	match self {
+	    LV::Num(s) => match other {
+		LV::Num(o) => s == o,
+		_ => {
+		    dbg!(self, other);
+		    panic!("NEED TO LOOK UP EQ SEMANTICS FOR LUA");
+		}
+	    },
+	    _ => {
+		dbg!(self, other);
+		todo!();
+	    }
+	}
+    }
+}
 #[derive(Clone)]
 pub struct LuaValueStack<'a> {
     values: Vec<LV<'a>>,
 }
 
-#[derive(Clone)]
+impl<'a> LuaValueStack<'a> {
+    fn push(&mut self, val: LV<'a>){
+	self.values.push(val);
+    }
+    fn pop(&mut self) -> Option<LV<'a>> {
+	return self.values.pop();
+    }
+}
+
+#[derive(Debug, Clone)]
+struct LuaEnvData<'a> {
+    // pretty sure there's a way to set this up without requiring Rc's here as well...
+    _values: Rc<RefCell<HashMap<String, LV<'a>>>>,
+    parent: Option<Rc<RefCell<LuaEnvData<'a>>>>,
+}
+
+impl <'a> LuaEnvData<'a> {
+    fn get(&self, name: &str) -> Option<LV<'a>> {
+	// either the value is in the top sourcemap or it's in the parent somewhere
+	let v = self._values.borrow();
+	let maybe_val = v.get(name);
+	match maybe_val {
+	    // if the top level hashmap contains the value, return that
+	    Some(val) => Some((*val).clone()),
+	    // if not, look in the parent
+	    None => {
+		match &self.parent {
+		    Some(env) => env.borrow().get(name),
+		    // if there's no parent, then the value really just doesn't exist
+		    None =>  None
+		}
+	    }
+	}
+    }
+}
+#[derive(Debug, Clone)]
 pub struct LuaEnv<'a> {
-    values: HashMap<String, LV<'a>>
+    data: Rc<RefCell<LuaEnvData<'a>>>,
 }
 
 impl<'a> LuaEnv<'a> {
+    fn new(values: HashMap<String, LV<'a>>, parent: Option<LuaEnv<'a>>) -> LuaEnv<'a>{
+	let new_parent = match parent {
+	    None => None,
+	    Some(env) => Some(env.data.clone())
+	};
+
+	
+	return LuaEnv {
+	    data: Rc::new(RefCell::new(
+		LuaEnvData {
+		    _values: Rc::new(RefCell::new(values)),
+		    parent: new_parent,
+		}
+	    ))
+	}
+    }
     fn set(&mut self, name: String, val: LV<'a>){
-	self.values.insert(name, val);
+	self.data.borrow_mut()._values.borrow_mut().insert(name, val);
+    }
+    fn get(&self, name: &str) -> Option<LV<'a>> {
+	return self.data.borrow().get(name);
+    }
+
+    fn make_child_env(&self) -> LuaEnv<'a> {
+	// this makes a new environment that has self as a parent
+	// so lookups will go through it (basically local scope from global)
+	return LuaEnv {
+	    data: Rc::new(RefCell::new(LuaEnvData {
+		_values: Rc::new(RefCell::new(HashMap::new())),
+		parent: Some(self.data.clone())
+	    }))
+	}
     }
 }
 
@@ -179,11 +263,11 @@ impl<'a> LuaRunState<'a> {
     fn enter_function_call(&mut self, func: LV<'a>, provided_args: LV<'a>) {
 	// set up a new lua frame as the top level func and work from there
 	match func {
-	    LV::LuaFunc {code, args, ellipsis, ..} => {
+	    LV::LuaFunc {code, args, ellipsis, parent_env, ..} => {
 		if ellipsis {
 		    panic!("TODO implement ellipsis function calls");
 		}
-		let mut new_frame = frame_from_code(code);
+		let mut new_frame = frame_from_code(code, parent_env.make_child_env());
 		new_frame.assign_args(args, provided_args);
 		// let's get this new frame set up
 		// TODO noclone
@@ -196,9 +280,13 @@ impl<'a> LuaRunState<'a> {
 	}
     }
 
-    fn return_from_funccall(&mut self) {
+    fn return_from_funccall(&mut self, return_value: LV<'a>) {
 	// set up the return of the func call in the above frame and then execute further
-	panic!("TODO: implement func returns");
+	// we'll first prep the frame
+	let mut previous_frame = self.frame_stack.pop().unwrap();
+	previous_frame.stack.push(return_value);
+	// then go to it
+	self.current_frame = previous_frame;
     }
 }
 #[allow(dead_code)]
@@ -229,20 +317,16 @@ pub fn global_env<'a>() -> LuaEnv<'a> {
 	})
     ];
 
-    return LuaEnv {
-	values: globals.iter().cloned().collect()
-    }
-
-    
+    return LuaEnv::new(globals.iter().cloned().collect(), None);
 }
-pub fn frame_from_code(code:Rc<CodeObj>) -> LuaFrame {
+pub fn frame_from_code<'a>(code:Rc<CodeObj<'a>>, env: LuaEnv<'a>) -> LuaFrame<'a> {
     return LuaFrame {
         code: code,
         pc: 0,
         stack: LuaValueStack {
             values: vec![]
         },
-	env: global_env()
+	env: env
     }
 }
 
@@ -255,8 +339,29 @@ pub fn initial_run_state<'a>(contents: &'a str, lua_file_path: &'a str) -> LuaRu
     return LuaRunState {
         file_path: String::from(lua_file_path),
         compiled_code: boxed_code.clone(),
-        current_frame: frame_from_code(boxed_code.clone()),
+        current_frame: frame_from_code(boxed_code.clone(), global_env()),
         frame_stack: vec![],
 	packages: stdlib()
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_env_inheritence(){
+	let mut base_env = LuaEnv::new(
+	    HashMap::new(),
+	    None
+	);
+	assert_eq!(base_env.get("foo"), None);
+	base_env.set("foo".to_string(), LV::Num(1.0));
+	assert_eq!(base_env.get("foo"), Some(LV::Num(1.0)));
+	let mut child_env = base_env.make_child_env();
+	assert_eq!(child_env.get("foo"), Some(LV::Num(1.0)));
+	child_env.set("foo".to_string(), LV::Num(2.0));
+	assert_eq!(child_env.get("foo"), Some(LV::Num(2.0)));
+	assert_eq!(base_env.get("foo"), Some(LV::Num(1.0)));
+    }
 }

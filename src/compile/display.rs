@@ -1,11 +1,12 @@
 use compile::CodeObj;
 use std::convert::TryInto;
 
-pub fn display_code_block<'a>(obj: CodeObj<'a>){
+pub fn display_code_block<'a>(obj: &CodeObj<'a>){
     // improvement possibilities
     // display the source file
     // display inner function stuff (like when building up)
-    println!(" BYTES\n==========");
+    println!("START<<<<<");
+    println!("MAIN BLOCK");
     // this value is to keep track of which line ew have printed so far
     let mut prev_line = 0;
     for (bc_idx, elt) in obj.bytecode.iter().enumerate() {
@@ -24,4 +25,9 @@ pub fn display_code_block<'a>(obj: CodeObj<'a>){
 	    println!(" {:?}", elt);
 	}
     }
+    for (idx, inner) in obj.inner_code.iter().enumerate() {
+	println!("INNER BLOCK {}", idx);
+	display_code_block(&inner);
+    }
+    println!(">>>>>END");
 }
