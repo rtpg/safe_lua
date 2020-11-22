@@ -9,6 +9,8 @@ local debug = require "debug"
 
 assert(type(1<2) == 'boolean')
 assert(type(true) == 'boolean' and type(false) == 'boolean')
+print(type(nil))
+assert(type(nil) == 'nil')
 assert(type(nil) == 'nil'
    and type(-3) == 'number'
    and type'x' == 'string'

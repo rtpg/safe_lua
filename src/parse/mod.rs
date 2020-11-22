@@ -654,8 +654,7 @@ pub fn parse<'a>(input: &'a str) -> ast::Block<'a> {
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use ast::Block;
-use super::*;
+    use super::*;
 
     use ::file_contents;
 

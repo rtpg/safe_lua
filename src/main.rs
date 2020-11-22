@@ -6,7 +6,8 @@ extern crate argh;
 extern crate lazy_static;
 
 use argh::FromArgs;
-
+#[macro_use]
+mod macros;
 mod eval;
 mod ast;
 mod parse;

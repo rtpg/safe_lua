@@ -5,6 +5,7 @@
  */
 pub mod display;
 
+use std::convert::TryInto;
 use std::rc::Rc;
 use nom_locate::LocatedSpan;
 use ast;
@@ -162,6 +163,12 @@ impl<'a> Sourcemap<'a> {
 	    }
 	}
     }
+    pub fn get_lines_for_bytecode(&self, bytecode_position: usize) -> (usize, &'a str) {
+	let loc = self.get_location(bytecode_position);
+	let loc_line: usize = loc.location_line().try_into().unwrap();
+	return (loc_line, self.get_line(loc_line));
+    }
+    
     pub fn get_line(&self, source_line: usize) -> &'a str{
 	match self.source_by_line.get(source_line) {
 	    Some(txt) => txt,
@@ -433,8 +440,18 @@ pub fn compile_stat<'a>(stat: ast::Stat<'a>, code: &mut impl Code<'a>){
 		    )
 		},
 		_ => {
-		    dbg!(funcname);
-		    panic!("No support for other components yet");
+		    // function a.b.c.f
+		    
+		    let last_elt = funcname.other_name_components[funcname.other_name_components.len() - 1].clone();
+		    let other_elts = funcname.other_name_components[0..funcname.other_name_components.len() - 1].iter().map(|name| ast::Suffix::DotAccess(name.to_string()) ).collect();
+		    
+		    ast::Var::DotAccess(
+			ast::Prefixexpr {
+			    prefix: ast::Prefix::Varname(funcname.first_name_component, funcname.loc),
+			    suffixes: other_elts,
+			},
+			last_elt
+		    )
 		}
 	    }; 
 

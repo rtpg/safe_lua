@@ -23,6 +23,14 @@ pub fn lua_binop_eq_impl(l: &LV, r: &LV) -> bool {
 		_ => false
 	    } 
 	},
+	LuaS(n) => {
+	    match r {
+		LuaS(m) => {
+		    n == m
+		},
+		_ => false
+	    }
+	},
 	_ => {
 	    dbg!(l);
 	    dbg!(r);
@@ -136,6 +144,39 @@ pub fn lua_binop_times<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
 	    match r {
 		Num(m) => {
 		    LV::Num(n * m)
+		},
+		_ => panic!("FAILURE (need to implement lua-bubbling failure)")
+	    } 
+	},
+	_ => {
+	    dbg!(l);
+	    dbg!(r);
+	    panic!("need binop impl");
+	}
+    }
+}
+
+pub fn lua_binop_and<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
+    // lua considers false and nil to be falsy
+    // everything else is truthy
+    // and returns first operator if it is falsy, second otherwise
+    match l {
+	LV::LuaNil => l.clone(),
+	LV::LuaFalse => l.clone(),
+	_ => r.clone()
+    }
+}
+
+pub fn lua_binop_less<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
+    match l {
+	Num(n) => {
+	    match r {
+		Num(m) => {
+		    if n < m {
+			LV::LuaTrue
+		    } else {
+			LV::LuaFalse
+		    }
 		},
 		_ => panic!("FAILURE (need to implement lua-bubbling failure)")
 	    } 

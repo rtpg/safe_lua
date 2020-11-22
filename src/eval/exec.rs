@@ -1,3 +1,4 @@
+#[macro_use]
 use eval::DBG_POP_PUSH;
 use eval::DBG_PRINT_INSTRUCTIONS;
 use eval::LuaRunState;
@@ -19,6 +20,19 @@ pub enum ExecResult {
 }
 
 
+macro_rules! vm_panic {
+    ($s: expr, $err: expr) => {
+	println!("!! Lua VM crash");
+	// TODO unwind the entire frame stack here for more information
+	let f = &$s.current_frame;
+	let (line_no, lines) = f.code.sourcemap.get_lines_for_bytecode(f.pc);
+	println!("!! failed on line {} of {}", line_no, $s.file_path);
+	println!("--> {}", lines);
+	println!("With:");
+	dbg!($err);
+	panic!("VM CRASH");
+    }
+}
 fn print_and_push<'a>(stack: &mut LuaValueStack<'a>, val: LV<'a>) {
     if DBG_POP_PUSH {
 	println!("PUSH => {}", val);
@@ -26,21 +40,7 @@ fn print_and_push<'a>(stack: &mut LuaValueStack<'a>, val: LV<'a>) {
     stack.values.push(val);
 }
 
-macro_rules! vm_panic {
-    ($s: expr, $err: expr) => {
-	println!("Lua VM crashed at: ");
-	// TODO unwind the entire frame stack here for more information
-	println!(
-	    "Line {0} of {1}",
-	    $s.current_frame.code.sourcemap.get_location($s.current_frame.pc).location_line(),
-	    $s.file_path
-	);
-	println!("With:");
-	dbg!($err);
-	panic!("VM CRASH");
-    }
-}
-
+#[macro_export]
 pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Option<u8>) -> ExecResult {
     // Move the machine forward until we hit the next yield
     macro_rules! pop {
@@ -55,6 +55,16 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 		None => {panic!("Popping an empty stack")}
 	    }
 	}
+    }
+
+    // fail the system
+    fn lua_fail<'a>(s: &mut LuaRunState<'a>, msg: &'static str){
+	println!("!! failed with message {}", msg);
+	let f = &s.current_frame;
+	let (line_no, lines) = f.code.sourcemap.get_lines_for_bytecode(f.pc);
+	println!("!! failed on line {}", line_no);
+	println!("--> {}", lines);
+	panic!(msg);
     }
 
     fn push<'a>(s: &mut LuaRunState<'a>, v: LV<'a>) {
@@ -111,6 +121,9 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
             BC::PUSH_NIL => {
 		push(s, LV::LuaNil);
 	    },
+	    BC::PUSH_TRUE => {
+		push(s, LV::LuaTrue);
+	    },
             BC::PUSH_FALSE => {
 		push(s, LV::LuaFalse);
 	    },
@@ -123,8 +136,8 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 			push(s, v_clone);
 		    },
 		    None => {
-			dbg!(val);
-			panic!("Key not found!")
+			// unknown names are nil
+			push(s, LV::LuaNil);
 		    }
 		}
 		
@@ -187,9 +200,11 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 		    "-" => lua_binop_minus(&l, &r),
 		    "+" => lua_binop_plus(&l, &r),
 		    "*" => lua_binop_times(&l, &r),
+		    "<" => lua_binop_less(&l, &r),
+		    "and" => lua_binop_and(&l, &r),
 		    _ => {
 			dbg!(binop);
-			panic!("Unknown binop");
+			vm_panic!(s, "unknown binop");
 		    }
 		};
 		push(s, result);
@@ -295,7 +310,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 		    },
 		    _ => {
 			dbg!(m_func);
-			panic!("Got a non-func to call!");
+			lua_fail(s, "Got a non-func to call");
 		    }
 		}
 	    },

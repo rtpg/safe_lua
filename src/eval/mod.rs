@@ -1,6 +1,8 @@
 #[macro_use]
 #[allow(dead_code)]
+#[macro_use]
 pub mod exec;
+use natives::lua_type;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use parse::parse;
@@ -217,8 +219,8 @@ pub struct LuaFrame<'a>{
     // This is a single frame, that includes the environment etc
     // calling into another function will build a frame that will
     // execute whatever needs to be executed
-    code: Rc<CodeObj<'a>>, // the code itself
-    pc: usize, // program counter
+    pub code: Rc<CodeObj<'a>>, // the code itself
+    pub pc: usize, // program counter
     stack: LuaValueStack<'a>, // value stack
     env: LuaEnv<'a>,
 }
@@ -250,10 +252,10 @@ pub struct LuaRunState<'a> {
     /*
     * store the current state of a program 
     */
-    file_path: String,
+    pub file_path: String,
     compiled_code: Rc<CodeObj<'a>>,
     // frame we are executing on
-    current_frame: LuaFrame<'a>,
+    pub current_frame: LuaFrame<'a>,
     // stack of frames (doesn't include existing frame)
     frame_stack: Vec<LuaFrame<'a>>,
     pub packages: HashMap<String, LV<'a>>,
@@ -302,19 +304,20 @@ pub fn run_to_checkpoint(state: LuaRunState) -> RunResult {
 }
 
 pub fn global_env<'a>() -> LuaEnv<'a> {
+    macro_rules! global {
+	($name: expr, $func: expr) => {
+	    ($name.to_string(), LV::NativeFunc {
+		name: $name.to_string(),
+		f: $func
+	    })
+	}
+    }
+    
     let globals: Vec<(String, LV<'a>)> = vec![
-	("print".to_string(), LV::NativeFunc {
-	    name: "print".to_string(),
-	    f: lua_print
-	}),
-	("require".to_string(), LV::NativeFunc {
-	    name: "require".to_string(),
-	    f: lua_require
-	}),
-	("assert".to_string(), LV::NativeFunc {
-	    name: "assert".to_string(),
-	    f: lua_assert
-	})
+	global!("print", lua_print),
+	global!("require", lua_require),
+	global!("assert", lua_assert),
+	global!("type", lua_type),
     ];
 
     return LuaEnv::new(globals.iter().cloned().collect(), None);

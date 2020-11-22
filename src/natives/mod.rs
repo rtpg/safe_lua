@@ -1,11 +1,12 @@
 pub mod binops;
 
+
 use super::eval::{
     LV,
     LuaRunState
 };
 
-fn unwrap_single_arg(args: Option<LV>) -> Option<LV> {
+fn unwrap_single_arg<'a>(args: Option<LV<'a>>) -> Option<LV<'a>> {
     // helper to unwrap a single arg from args
     match args {
 	Some(LV::LuaList(req_args)) => {
@@ -31,15 +32,36 @@ fn unwrap_single_arg(args: Option<LV>) -> Option<LV> {
 	}
     }
 }
-pub fn lua_assert<'a>(_s: &LuaRunState, args: Option<LV>) -> LV<'a> {
+macro_rules! vm_panic {
+    ($s: expr, $err: expr) => {
+	println!("!! Lua VM crash");
+	// TODO unwind the entire frame stack here for more information
+	let f = &$s.current_frame;
+	let (line_no, lines) = f.code.sourcemap.get_lines_for_bytecode(f.pc);
+	println!("!! failed on line {} of {}", line_no, $s.file_path);
+	println!("--> {}", lines);
+	println!("With:");
+	dbg!($err);
+	panic!("VM CRASH");
+    }
+}
+
+fn lua_truthy(elt: &LV) -> bool {
+    match elt {
+	LV::LuaFalse => false,
+	LV::LuaNil => false,
+	_ => true
+    }
+}
+
+pub fn lua_assert<'a, 'b>(_s: &LuaRunState, args: Option<LV<'b>>) -> LV<'a> {
     match unwrap_single_arg(args){
 	Some(arg) => {
-	    match arg {
-		LV::LuaTrue => {return LV::LuaNil},
-		_ => {
-		    dbg!(arg);
-		    panic!("Assertion failure in Lua Execution");
-		}
+	    if lua_truthy(&arg) {
+		arg.clone()
+	    } else {
+		dbg!(arg);
+		vm_panic!(_s, "Assertion failure in Lua Execution");
 	    }
 	},
 	None => {
@@ -70,6 +92,27 @@ pub fn lua_print<'a>(_s: &LuaRunState, args: Option<LV>) -> LV<'a> {
     }
 }
 
+fn lua_type_internal<'a>(arg: LV) -> String {
+    match arg {
+	LV::LuaTrue => "boolean".to_string(),
+	LV::LuaFalse => "boolean".to_string(),
+	_ => {
+	    dbg!(arg);
+	    panic!("Type not implemented");
+	}
+    }
+}
+pub fn lua_type<'a>(_s: &LuaRunState, args: Option<LV>) -> LV<'a> {
+    match unwrap_single_arg(args){
+	Some(arg) => {
+	    let type_name = lua_type_internal(arg);
+	    return LV::LuaS(type_name);
+	},
+	None => {
+	    panic!("Wrong arity");
+	}
+    }
+}
 pub fn lua_require<'a>(s: &LuaRunState<'a>, args: Option<LV>) -> LV<'a> {
     match unwrap_single_arg(args) {
 	Some(arg) => {

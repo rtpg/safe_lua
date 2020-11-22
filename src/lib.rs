@@ -5,6 +5,7 @@ extern crate nom_locate;
 #[macro_use]
 extern crate lazy_static;
 
+pub mod macros;
 #[allow(dead_code)]
 pub mod eval;
 #[allow(dead_code)]
