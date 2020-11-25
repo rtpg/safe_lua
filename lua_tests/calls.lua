@@ -8,7 +8,9 @@ local debug = require "debug"
 -- get the opportunity to test 'type' too ;)
 
 assert(type(1<2) == 'boolean')
+print("HI")
 assert(type(true) == 'boolean' and type(false) == 'boolean')
+print("HI")
 print(type(nil))
 assert(type(nil) == 'nil')
 assert(type(nil) == 'nil'

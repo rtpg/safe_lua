@@ -54,7 +54,7 @@ fn lua_truthy(elt: &LV) -> bool {
     }
 }
 
-pub fn lua_assert<'a, 'b>(_s: &LuaRunState, args: Option<LV<'b>>) -> LV<'a> {
+pub fn lua_assert<'a, 'b>(_s: &LuaRunState, args: Option<LV<'a>>) -> LV<'a> {
     match unwrap_single_arg(args){
 	Some(arg) => {
 	    if lua_truthy(&arg) {
@@ -96,6 +96,9 @@ fn lua_type_internal<'a>(arg: LV) -> String {
     match arg {
 	LV::LuaTrue => "boolean".to_string(),
 	LV::LuaFalse => "boolean".to_string(),
+	LV::LuaNil => "nil".to_string(),
+	LV::LuaS(_) => "string".to_string(),
+	LV::Num(_) => "number".to_string(),
 	_ => {
 	    dbg!(arg);
 	    panic!("Type not implemented");

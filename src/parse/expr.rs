@@ -21,27 +21,29 @@ pub fn expr<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, ast::Expr<'a
 fn expr2<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, ast::Expr<'a>> {
     // basically, parse binary opereators since they're 
     // left recursive
-    let (i, first_expr) = expr_consume(i)?;
-    let (i, bin_op_list) = many0(binop_right)(i)?;
-    if bin_op_list.len() == 0 {
-        // no binary operations, return the expression
-        return Ok((i, first_expr));
-    } else {
-        // we need to fold the binary operator
-        let mut result_expression = first_expr;
-        for (operator, right_exp) in bin_op_list {
-            result_expression = ast::Expr::BinOp(
-                Box::new(result_expression),
-                operator,
-                Box::new(right_exp),
-            )
-        }
-        return Ok((i, result_expression));
-    }
+    use parse::binop::parse_binops;
+    return parse_binops(i);
+    // let (i, first_expr) = expr_consume(i)?;
+    // let (i, bin_op_list) = many0(binop_right)(i)?;
+    // if bin_op_list.len() == 0 {
+    //     // no binary operations, return the expression
+    //     return Ok((i, first_expr));
+    // } else {
+    //     // we need to fold the binary operator
+    //     let mut result_expression = first_expr;
+    //     for (operator, right_exp) in bin_op_list {
+    //         result_expression = ast::Expr::BinOp(
+    //             Box::new(result_expression),
+    //             operator,
+    //             Box::new(right_exp),
+    //         )
+    //     }
+    //     return Ok((i, result_expression));
+    // }
 }
 
 
-fn expr_consume<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, ast::Expr<'a>> {
+pub fn expr_consume<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, ast::Expr<'a>> {
     return alt((
         expr_constants,
         map(prefixexp, |p| ast::Expr::Pref(Box::new(p))),

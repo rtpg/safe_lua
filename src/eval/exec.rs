@@ -316,15 +316,31 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 	    },
 	    BC::PANIC(err_msg) => {
 		dbg!(err_msg);
-		panic!("Lua panic opcode");
+		vm_panic!(s, "Lua panic opcode");
 	    },
 	    BC::RETURN_VALUE => {
 		let return_value = pop!();
 		s.return_from_funccall(return_value);
 	    },
+	    BC::UNOP(code) => {
+		let value = pop!();
+		match code.as_str() {
+		    "-" => match value {
+			LV::Num(n) => push(s, LV::Num(-n)),
+			_ => {
+			    dbg!(value);
+			    vm_panic!(s, "Attempted arithmetic on a non-number");
+			}
+		    },
+		    _ => {
+			dbg!(code);
+			vm_panic!(s, "Unknown op-code");
+		    }
+		}
+	    },
             _ => {
                 dbg!(next_instruction);
-                panic!("Unhandled Bytecode");
+                vm_panic!(s, "Unhandled Bytecode");
             }
         }
 	match intended_next_pc {

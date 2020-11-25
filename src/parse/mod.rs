@@ -5,6 +5,7 @@ extern crate nom_packrat;
 pub mod utils;
 mod func;
 mod expr;
+mod binop;
 
 use nom::sequence::terminated;
 use nom_locate::LocatedSpan;
@@ -600,18 +601,15 @@ fn unary_op<'a,'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, String>{
 }
 
 
-fn binop_right<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, (ast::BinaryOperator, ast::Expr<'a>)> {
-    let (i, operator) = alt((
-        kwd("//"),kwd(">>"),kwd("<<"),kwd(".."),
-        kwd("<="),kwd(">="),kwd("=="),kwd("~="),
-        kwd("and"),kwd("or"),
-        kwd("+"), kwd("-"), kwd("*"), kwd("/"), kwd("^"), kwd("%"),
-        kwd("&"), kwd("~"), kwd("|"), kwd("<"), kwd(">"),
-    ))(i)?;
-    let (i, right_expr) = expr(i)?;
-    return Ok((i,
-    (operator.val, right_expr)));
-}
+// fn binop_right<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, (ast::BinaryOperator, ast::Expr<'a>)> {
+//     // order of operations defined at 
+//     // https://www.lua.org/manual/5.3/manual.html#3.4.8
+//     // (order reversed both vertically and horizontally)
+//     let (i, operator) = (i)?;
+//     let (i, right_expr) = expr(i)?;
+//     return Ok((i,
+//     (operator.val, right_expr)));
+// }
 
 /**
  * Attempt parsing a string, return None if it fails
@@ -644,7 +642,7 @@ pub fn parse<'a>(input: &'a str) -> ast::Block<'a> {
     let (remaining_tokens, b) = block(&tokens).unwrap();
     if remaining_tokens.len() > 0 {
         for t in &remaining_tokens[..30]{
-            dbg!(t);
+	    println!("line {}: {:?}", t.location.location_line(), t.val);
         }
         panic!("Remaining tokens");
     }
@@ -715,6 +713,11 @@ return 5,f
 
             "#
         );
+
+	assert_parse_all!(
+	    expr,
+            "assert(a.t:x(2,3) == -95)"
+	);
 
         assert_parse_all!(
             expr,
@@ -1167,6 +1170,16 @@ local x = 3;
         }
     }
 
+    #[test]
+    fn test_precedence(){
+	let contents = "a == b and c == d";
+	let tokens = lex_all(LexInput::new(&contents)).unwrap().1;
+	let parsed_tokens = expr(&tokens);
+	dbg!(parsed_tokens);
+	// you want (a == b) and (c==d) but get (a == (b and (c == d)))
+	assert_eq!(true, false);
+    }
+    
     #[test]
     fn test_parse(){
 	let input = "nil";

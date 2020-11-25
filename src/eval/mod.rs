@@ -34,7 +34,7 @@ pub enum LV<'a> {
     },
     NativeFunc {
 	name: String,
-	f: fn(&LuaRunState<'a>, Option<LV>) -> LV<'a>
+	f: fn(&LuaRunState<'a>, Option<LV<'a>>) -> LV<'a>
     },
     LuaFunc {
 	code_idx: usize,

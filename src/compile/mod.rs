@@ -170,7 +170,7 @@ impl<'a> Sourcemap<'a> {
     }
     
     pub fn get_line(&self, source_line: usize) -> &'a str{
-	match self.source_by_line.get(source_line) {
+	match self.source_by_line.get(source_line-1) {
 	    Some(txt) => txt,
 	    None => "OUT OF BOUNDS SOURCEMAP",
 	}
