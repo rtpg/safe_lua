@@ -17,7 +17,7 @@ pub fn do_repl() {
 	"<repl>",
     );
 
-    let mut stdin = io::stdin();
+    let stdin = io::stdin();
     let mut stdout = io::stdout();
     
     let input = &mut String::new();
@@ -33,15 +33,13 @@ pub fn do_repl() {
 	// capture the input
 	input.clear();
 	stdin.read_line(input);
-	// we'll write out the output just because
-	stdout.write(input.as_bytes());
-	
+
 	// now we'll need to compile the input
 	let compile_result = try_compile_block(input);
 	match compile_result {
 	    Ok(code_block) => {
+		// load the code, it will run at the top of the loop
 		run_state.load_code(code_block);
-		println!("COMPILED!");
 	    },
 	    Err(err_msg) => {
 		println!("compilation failed with {}", err_msg);

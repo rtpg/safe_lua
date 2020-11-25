@@ -616,8 +616,8 @@ fn unary_op<'a,'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, String>{
  *
  * a non-panic version of parse
  */
-pub fn try_parse<'a, 'b>(input: &'a str) -> Result<ast::Block<'b>, String> {
-    let input = LexInput::new(input.clone());
+pub fn try_parse<'a>(input: &'a str) -> Result<ast::Block<'a>, String> {
+    let input = LexInput::new(&input);
     let (input, tokens) = lex_all(input).unwrap();
     if input.to_string().len() > 0 {
         // failed lex

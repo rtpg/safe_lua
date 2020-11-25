@@ -37,7 +37,7 @@ pub enum LV<'a> {
     },
     LuaFunc {
 	code_idx: usize,
-	code: Rc<CodeObj<'a>>,
+	code: Rc<CodeObj>,
 	args: ast::Namelist,
 	ellipsis: bool,
 	parent_env: LuaEnv<'a>,
@@ -48,7 +48,7 @@ pub enum LV<'a> {
     // this value shouldn't leak normally
     CodeIndex(usize),
     // this is the actual code object
-    Code(Rc<CodeObj<'a>>),
+    Code(Rc<CodeObj>),
     // namelist. lazy
     NameList(ast::Namelist, bool),
     LuaNil,
@@ -219,7 +219,7 @@ pub struct LuaFrame<'a>{
     // This is a single frame, that includes the environment etc
     // calling into another function will build a frame that will
     // execute whatever needs to be executed
-    pub code: Rc<CodeObj<'a>>, // the code itself
+    pub code: Rc<CodeObj>, // the code itself
     pub pc: usize, // program counter
     stack: LuaValueStack<'a>, // value stack
     env: LuaEnv<'a>,
@@ -253,7 +253,7 @@ pub struct LuaRunState<'a> {
     * store the current state of a program 
     */
     pub file_path: String,
-    compiled_code: Rc<CodeObj<'a>>,
+    compiled_code: Rc<CodeObj>,
     pub global_env: LuaEnv<'a>,
     // frame we are executing on
     pub current_frame: LuaFrame<'a>,
@@ -292,11 +292,12 @@ impl<'a> LuaRunState<'a> {
 	self.current_frame = previous_frame;
     }
 
-    pub fn load_code(&mut self, new_code_obj: CodeObj<'a>){
+    pub fn load_code(&mut self, new_code_obj: CodeObj){
+	// load in a code object to run
 	let boxed_code = Rc::new(new_code_obj);
 	let new_frame = frame_from_code(boxed_code.clone(), self.global_env.clone());
-	// clear out the frame stack
-	
+	self.current_frame = new_frame;
+	self.frame_stack = vec![];
     }
 }
 #[allow(dead_code)]
@@ -330,7 +331,7 @@ pub fn global_env<'a>() -> LuaEnv<'a> {
 
     return LuaEnv::new(globals.iter().cloned().collect(), None);
 }
-pub fn frame_from_code<'a>(code:Rc<CodeObj<'a>>, env: LuaEnv<'a>) -> LuaFrame<'a> {
+pub fn frame_from_code<'a>(code:Rc<CodeObj>, env: LuaEnv<'a>) -> LuaFrame<'a> {
     return LuaFrame {
         code: code,
         pc: 0,

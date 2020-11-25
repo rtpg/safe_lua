@@ -2,7 +2,7 @@ use compile::CodeObj;
 use parse;
 use super::compile;
 
-pub fn try_compile_block<'a, 'b>(input: &'a str) -> Result<CodeObj<'a>, String> {
+pub fn try_compile_block<'a>(input: &'a str) -> Result<CodeObj, String> {
     // take some input and then build out the code for it
     // this is mainly for REPL usage
     let parse_result = parse::try_parse(input);

@@ -1,4 +1,3 @@
-use eval::RunResult::Done;
 use natives::lua_truthy;
 use eval::DBG_POP_PUSH;
 use eval::DBG_PRINT_INSTRUCTIONS;

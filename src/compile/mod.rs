@@ -6,6 +6,7 @@
 pub mod display;
 pub mod utils;
 
+
 use std::convert::TryInto;
 use std::rc::Rc;
 use nom_locate::LocatedSpan;
@@ -118,30 +119,54 @@ pub enum BC {
     PANIC(String),
 }
 
-#[derive(Debug)]
-pub struct Sourcemap<'a> {
-    // this struct stores sourcemap information "nicely" (at least in theory)
-    // later: make this more performant/space friendly
-    map_data: Vec<LocatedSpan<&'a str>>,
-    original_source: &'a str,
-    // this lets us quickly get a line
-    source_by_line: Vec<&'a str>,
+#[derive(Debug, Clone, Copy)]
+pub struct SourcemapLoc {
+    line: usize,
 }
 
-impl<'a> Sourcemap<'a> {
-    pub fn new(original_source: &'a str) -> Sourcemap<'a>{
-	return Sourcemap {
-	    map_data: vec![],
-	    original_source: original_source,
-	    source_by_line: original_source.split("\n").collect(),
+impl SourcemapLoc {
+    pub fn new(line: usize) -> SourcemapLoc {
+	return SourcemapLoc {line: line};
+    }
+
+    pub fn location_line(&self) -> usize { 
+	return self.line;
+    }
+
+    pub fn from_span<'a>(loc: LocatedSpan<&'a str>) -> SourcemapLoc {
+	return SourcemapLoc {
+	    line: loc.location_line().try_into().unwrap()
 	}
     }
-    pub fn write_map(&mut self, bytecode_position: usize, location: LocatedSpan<&'a str>){
+}
+
+#[derive(Debug)]
+pub struct Sourcemap {
+    // this struct stores sourcemap information "nicely" (at least in theory)
+    // later: make this more performant/space friendly
+    map_data: Vec<SourcemapLoc>,
+    original_source: String,
+    // this lets us quickly get a line
+    source_by_line: Vec<String>,
+}
+
+impl Sourcemap {
+    
+    pub fn new<'b>(original_source: &'b str) -> Sourcemap{
+	return Sourcemap {
+	    map_data: vec![],
+	    original_source: original_source.to_string(),
+	    source_by_line: original_source.split("\n").map(
+		|elt| elt.to_string()
+	    ).collect(),
+	}
+    }
+    pub fn write_map<'a>(&mut self, bytecode_position: usize, location: LocatedSpan<&'a str>){
 	// write the mapping for the bytecode position
 	if self.map_data.len() < bytecode_position + 1 {
 	    // copy the last known location N times
 	    let default_location = match self.map_data.len() {
-		0 => LocatedSpan::new("unknown location"),
+		0 => SourcemapLoc::new(0),
 		_ => self.map_data[self.map_data.len()-1]
 	    };
 	    self.map_data.resize(
@@ -149,10 +174,10 @@ impl<'a> Sourcemap<'a> {
 		default_location,
 	    );
 	}
-	self.map_data[bytecode_position] = location
+	self.map_data[bytecode_position] = SourcemapLoc::from_span(location)
     }
 
-    pub fn get_location(&self, bytecode_position: usize) -> LocatedSpan<&str> {
+    pub fn get_location(&self, bytecode_position: usize) -> SourcemapLoc {
 	// take the bytecode position and get
 	match self.map_data.get(bytecode_position) {
 	    Some(loc) => *loc,
@@ -164,30 +189,30 @@ impl<'a> Sourcemap<'a> {
 	    }
 	}
     }
-    pub fn get_lines_for_bytecode(&self, bytecode_position: usize) -> (usize, &'a str) {
+    pub fn get_lines_for_bytecode(&self, bytecode_position: usize) -> (usize, String) {
 	let loc = self.get_location(bytecode_position);
 	let loc_line: usize = loc.location_line().try_into().unwrap();
 	return (loc_line, self.get_line(loc_line));
     }
     
-    pub fn get_line(&self, source_line: usize) -> &'a str{
+    pub fn get_line(&self, source_line: usize) -> String {
 	match self.source_by_line.get(source_line-1) {
-	    Some(txt) => txt,
-	    None => "OUT OF BOUNDS SOURCEMAP",
+	    Some(txt) => txt.to_string(),
+	    None => "OUT OF BOUNDS SOURCEMAP".to_string(),
 	}
     }
 }
 // code objects
 // they can include references to other code objects
 #[derive(Debug)]
-pub struct CodeObj<'a> {
+pub struct CodeObj {
     // the actual commands to run when we want to run this code block
     pub bytecode: Vec<BC>,
     // the mapping from bytecode to code location
-    pub sourcemap: Sourcemap<'a>,
+    pub sourcemap: Sourcemap,
     // references to other code blocks
     // (for example code blocks for funciton definitions)
-    inner_code: Vec<Rc<CodeObj<'a>>>,
+    inner_code: Vec<Rc<CodeObj>>,
     // positions in the bytecode for jump labels
     labels: HashMap<String, usize>,
     // jump targets, used for looping etc
@@ -195,8 +220,8 @@ pub struct CodeObj<'a> {
     pub jump_target: Vec<Option<usize>>,
 }
 
-impl<'a> CodeObj<'a> {
-    pub fn lookup_code_by_idx<'b>(&'b self, idx: usize) -> Rc<CodeObj<'a>> {
+impl CodeObj {
+    pub fn lookup_code_by_idx<'b>(&'b self, idx: usize) -> Rc<CodeObj> {
 	return self.inner_code[idx].clone();
     }
 }
@@ -209,7 +234,7 @@ pub trait Code<'a> {
     // emit a noop and provide a jump target for later
     fn emit_jump_location(&mut self) -> JumpTarget;
     // save an inner code object, and return its index
-    fn write_inner_code(&mut self, CodeObj<'a>) -> usize;
+    fn write_inner_code(&mut self, CodeObj) -> usize;
     // add a label
     fn add_label(&mut self, String);
     // prep a forward jump
@@ -220,7 +245,7 @@ pub trait Code<'a> {
     fn emit_fwd_jump_location(&mut self, JumpTarget);
 }
 
-impl<'a> Code<'a> for CodeObj<'a> {
+impl<'a> Code<'a> for CodeObj {
     fn emit(&mut self, elt: BC, location: Option<LocatedSpan<&'a str>>){
         self.bytecode.push(elt);
 	if let Some(loc) = location {
@@ -259,7 +284,7 @@ impl<'a> Code<'a> for CodeObj<'a> {
 	    }
         }
     }
-    fn write_inner_code(&mut self, code: CodeObj<'a>) -> usize {
+    fn write_inner_code(&mut self, code: CodeObj) -> usize {
         // TODO is this safe?
         self.inner_code.push(Rc::new(code));
         // TODO not sure if this is the right thing to return either
@@ -601,7 +626,7 @@ pub fn push_expr<'a>(expr: ast::Expr<'a>, code: &mut impl Code<'a>){
     }
 }
 
-pub fn new_code_obj<'a>(original_source: &'a str) -> CodeObj<'a>{
+pub fn new_code_obj<'a, 'b>(original_source: &'a str) -> CodeObj{
     return CodeObj {
         bytecode: Vec::new(),
 	sourcemap: Sourcemap::new(original_source),
@@ -914,7 +939,7 @@ pub fn compile_block<'a>(b: ast::Block<'a>, code: &mut impl Code<'a>) {
         }
     }
 }
-pub fn compile<'a>(parsed_block: ast::Block<'a>, contents: &'a str) -> CodeObj<'a> {
+pub fn compile<'a, 'b>(parsed_block: ast::Block<'a>, contents: &'a str) -> CodeObj {
     let mut code = new_code_obj(contents);
     compile_block(parsed_block, &mut code);
     return code;

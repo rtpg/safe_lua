@@ -1,7 +1,7 @@
 use compile::CodeObj;
 use std::convert::TryInto;
 
-pub fn display_code_block<'a>(obj: &CodeObj<'a>){
+pub fn display_code_block<'a>(obj: &CodeObj){
     // improvement possibilities
     // display the source file
     // display inner function stuff (like when building up)
