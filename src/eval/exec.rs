@@ -9,6 +9,8 @@ use compile::{
     JumpTarget
 };
 use natives::binops::*;
+use std::collections::HashMap;
+
 
 pub enum ExecResult {
     // there was some error in the process
@@ -157,6 +159,11 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 		    n.to_string(),
 		    val
 		);
+	    },
+	    BC::PUSH_NEW_TBL => {
+		push(s, LV::LuaTable {
+		    v: HashMap::new(),
+		})
 	    },
 	    BC::POP => {
 		pop!();

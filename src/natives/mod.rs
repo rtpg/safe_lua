@@ -97,6 +97,9 @@ fn lua_type_internal<'a>(arg: LV) -> String {
 	LV::LuaTrue => "boolean".to_string(),
 	LV::LuaFalse => "boolean".to_string(),
 	LV::LuaNil => "nil".to_string(),
+	LV::LuaTable {..} => "table".to_string(),
+	LV::NativeFunc {..} => "function".to_string(),
+	LV::LuaFunc {..} => "function".to_string(),
 	LV::LuaS(_) => "string".to_string(),
 	LV::Num(_) => "number".to_string(),
 	_ => {
