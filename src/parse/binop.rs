@@ -3,7 +3,7 @@
 
 // ^ (exponent)
 // % // / * (multop)
-// - + (plusopt)
+// - + (plusop)
 // .. (concat)
 // >> << (bitshift)
 // & (bitand)
@@ -22,8 +22,6 @@ use parse::{
     pair,
     alt,
     kwd,
-    expr,
-    
 };
     
 use parse::nom::{
@@ -43,7 +41,7 @@ pub fn exponent<'a, 'b>(i: &'b IStream<'a>) -> EResult<'a, 'b> {
     let (i, binops) = many0(
 	pair(
          kwd("^"),
-	 exponent
+	 maybe_unaryop 
 	))(i)?;
     return Ok(
 	(i,
@@ -253,18 +251,4 @@ fn fold_binops<'a>(first_expr: ast::Expr<'a>, binops: Vec<(Lex<'a>, ast::Expr<'a
 	}
 	return result_expression;
     }
-}
-
-
-fn binop_right<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, (ast::BinaryOperator, ast::Expr<'a>)> {
-    let (i, operator) = alt((
-        kwd("//"),kwd(">>"),kwd("<<"),kwd(".."),
-        kwd("<="),kwd(">="),kwd("=="),kwd("~="),
-        kwd("and"),kwd("or"),
-        kwd("+"), kwd("-"), kwd("*"), kwd("/"), kwd("^"), kwd("%"),
-        kwd("&"), kwd("~"), kwd("|"), kwd("<"), kwd(">"),
-    ))(i)?;
-    let (i, right_expr) = expr(i)?;
-    return Ok((i,
-    (operator.val, right_expr)));
 }

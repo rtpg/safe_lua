@@ -1,6 +1,5 @@
 #[macro_use]
 #[allow(dead_code)]
-#[macro_use]
 pub mod exec;
 use natives::lua_type;
 use std::cell::RefCell;
@@ -142,6 +141,7 @@ impl<'a> LuaValueStack<'a> {
     fn push(&mut self, val: LV<'a>){
 	self.values.push(val);
     }
+    #[allow(dead_code)]
     fn pop(&mut self) -> Option<LV<'a>> {
 	return self.values.pop();
     }

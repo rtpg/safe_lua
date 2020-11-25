@@ -1,4 +1,3 @@
-#[macro_use]
 use eval::DBG_POP_PUSH;
 use eval::DBG_PRINT_INSTRUCTIONS;
 use eval::LuaRunState;
@@ -10,7 +9,6 @@ use compile::{
 };
 use natives::binops::*;
 use std::collections::HashMap;
-
 
 pub enum ExecResult {
     // there was some error in the process
@@ -42,7 +40,7 @@ fn print_and_push<'a>(stack: &mut LuaValueStack<'a>, val: LV<'a>) {
     stack.values.push(val);
 }
 
-#[macro_export]
+
 pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Option<u8>) -> ExecResult {
     // Move the machine forward until we hit the next yield
     macro_rules! pop {

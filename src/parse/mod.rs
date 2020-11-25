@@ -1171,16 +1171,6 @@ local x = 3;
     }
 
     #[test]
-    fn test_precedence(){
-	let contents = "a == b and c == d";
-	let tokens = lex_all(LexInput::new(&contents)).unwrap().1;
-	let parsed_tokens = expr(&tokens);
-	dbg!(parsed_tokens);
-	// you want (a == b) and (c==d) but get (a == (b and (c == d)))
-	assert_eq!(true, false);
-    }
-    
-    #[test]
     fn test_parse(){
 	let input = "nil";
         let l: Vec<lex::Lex> = lex_all(LexInput::new(input)).unwrap().1;

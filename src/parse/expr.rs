@@ -2,20 +2,20 @@ use super::*;
 
 pub fn expr<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, ast::Expr<'a>>{
     // parse out any unary operators and then read inner expressions;
+    return expr2(i);
+    // let (i, mut unops) = many0(unary_op)(i)?;
+    // let (i, inner_expr) = expr2(i)?;
 
-    let (i, mut unops) = many0(unary_op)(i)?;
-    let (i, inner_expr) = expr2(i)?;
+    // let mut return_result = inner_expr;
+    // unops.reverse();
+    // for unop in unops {
+    //     return_result = ast::Expr::UnOp(
+    //         unop,
+    //         Box::new(return_result)
+    //     );
+    // }
 
-    let mut return_result = inner_expr;
-    unops.reverse();
-    for unop in unops {
-        return_result = ast::Expr::UnOp(
-            unop,
-            Box::new(return_result)
-        );
-    }
-
-    return Ok((i, return_result));
+    // return Ok((i, return_result));
 }
 
 fn expr2<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, ast::Expr<'a>> {
