@@ -4,6 +4,7 @@
  * operations
  */
 pub mod display;
+pub mod utils;
 
 use std::convert::TryInto;
 use std::rc::Rc;

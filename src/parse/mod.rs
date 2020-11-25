@@ -616,20 +616,19 @@ fn unary_op<'a,'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, String>{
  *
  * a non-panic version of parse
  */
-#[cfg(test)]
-pub fn try_parse(input: &str) -> Option<ast::Block> {
-    let input = LexInput::new(input);
+pub fn try_parse<'a, 'b>(input: &'a str) -> Result<ast::Block<'b>, String> {
+    let input = LexInput::new(input.clone());
     let (input, tokens) = lex_all(input).unwrap();
     if input.to_string().len() > 0 {
         // failed lex
-        return None;
+        return Err("Failed to lex all input".to_string());
     }
     let (remaining_tokens, b) = block(&tokens).unwrap();
     if remaining_tokens.len() > 0 {
         // failed parse
-        return None;
+        return Err("Failed to parse all input".to_string());
     }
-    return Some(b);
+    return Ok(b);
 }
 
 pub fn parse<'a>(input: &'a str) -> ast::Block<'a> {
@@ -1143,13 +1142,13 @@ local x = 3;
 
             file_contents!(unwrapped_path.clone(), contents);
             match try_parse(contents.as_str()){
-                None => {
+                Err(err) => {
                     // failed parse
-                    println!("Failed!");
+                    println!("Failed with {}!", err);
                     failure_count += 1;
                     last_failure = Some(unwrapped_path);
                 },
-                Some(_) => {
+                Ok(_) => {
                     // succeeded parse
                     println!("success");
                 }

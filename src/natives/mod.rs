@@ -46,7 +46,7 @@ macro_rules! vm_panic {
     }
 }
 
-fn lua_truthy(elt: &LV) -> bool {
+pub fn lua_truthy(elt: &LV) -> bool {
     match elt {
 	LV::LuaFalse => false,
 	LV::LuaNil => false,

@@ -5,6 +5,7 @@ extern crate argh;
 #[macro_use]
 extern crate lazy_static;
 
+use repl::do_repl;
 use argh::FromArgs;
 #[macro_use]
 mod macros;
@@ -18,22 +19,35 @@ mod lua_stdlib;
 use std::fs::File;
 use std::io::Read;
 mod utils;
+mod repl;
 
 
 #[derive(FromArgs)]
 #[argh(description="Safe Lua")]
 struct MainOpts {
     #[argh(positional, description="the script to run")]
-    script: String,
+    script: Option<String>,
     #[argh(switch, description="just show me the bytecode")]
     bytecode: bool,
+    #[argh(switch, description="run the REPL")]
+    repl: bool,
 }
 
 
 #[allow(unused_variables)]
 fn main(){
     let opts: MainOpts = argh::from_env();
-    let filepath = opts.script;
+
+    if opts.repl {
+	do_repl();
+	// the repl should be a loop
+	panic!("We shouldn't ever reach this point");
+    }
+    // if we got here then we're going to be running a script
+    if opts.script.is_none(){
+	panic!("Missing the script argument");
+    }
+    let filepath = opts.script.unwrap();
     let mut file = File::open(&filepath).unwrap();
     let mut contents = String::new();
     file.read_to_string(&mut contents).unwrap();

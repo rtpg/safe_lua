@@ -1,3 +1,5 @@
+use eval::RunResult::Done;
+use natives::lua_truthy;
 use eval::DBG_POP_PUSH;
 use eval::DBG_PRINT_INSTRUCTIONS;
 use eval::LuaRunState;
@@ -10,6 +12,7 @@ use compile::{
 use natives::binops::*;
 use std::collections::HashMap;
 
+#[derive(Debug)]
 pub enum ExecResult {
     // there was some error in the process
     Error(String),
@@ -40,6 +43,19 @@ fn print_and_push<'a>(stack: &mut LuaValueStack<'a>, val: LV<'a>) {
     stack.values.push(val);
 }
 
+pub fn exec_until_done<'a, 'b>(s: &'b mut LuaRunState<'a>) -> ExecResult {
+    // run the state until we hit a done state
+    // this will error out on yields etc
+    loop {
+	let result = exec_to_next_yield(s, None);
+	if matches!(result, ExecResult::Done(_)){
+	    return result
+	} else {
+	    dbg!(result);
+	    panic!("Not handled");
+	}
+    }
+}
 
 pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Option<u8>) -> ExecResult {
     // Move the machine forward until we hit the next yield
@@ -205,8 +221,11 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 		    "-" => lua_binop_minus(&l, &r),
 		    "+" => lua_binop_plus(&l, &r),
 		    "*" => lua_binop_times(&l, &r),
+		    "/" => lua_binop_div(&l, &r),
 		    "<" => lua_binop_less(&l, &r),
+		    ">" => lua_binop_greater(&l, &r),
 		    "and" => lua_binop_and(&l, &r),
+		    "or" => lua_binop_or(&l, &r),
 		    _ => {
 			dbg!(binop);
 			vm_panic!(s, "unknown binop");
@@ -335,6 +354,13 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 			_ => {
 			    dbg!(value);
 			    vm_panic!(s, "Attempted arithmetic on a non-number");
+			}
+		    },
+		    "not" => {
+			if lua_truthy(&value) {
+			    push(s, LV::LuaFalse);
+			} else {
+			    push(s, LV::LuaTrue);
 			}
 		    },
 		    _ => {

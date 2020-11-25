@@ -254,6 +254,7 @@ pub struct LuaRunState<'a> {
     */
     pub file_path: String,
     compiled_code: Rc<CodeObj<'a>>,
+    pub global_env: LuaEnv<'a>,
     // frame we are executing on
     pub current_frame: LuaFrame<'a>,
     // stack of frames (doesn't include existing frame)
@@ -289,6 +290,13 @@ impl<'a> LuaRunState<'a> {
 	previous_frame.stack.push(return_value);
 	// then go to it
 	self.current_frame = previous_frame;
+    }
+
+    pub fn load_code(&mut self, new_code_obj: CodeObj<'a>){
+	let boxed_code = Rc::new(new_code_obj);
+	let new_frame = frame_from_code(boxed_code.clone(), self.global_env.clone());
+	// clear out the frame stack
+	
     }
 }
 #[allow(dead_code)]
@@ -339,10 +347,12 @@ pub fn initial_run_state<'a>(contents: &'a str, lua_file_path: &'a str) -> LuaRu
     let parsed_content = parse(contents);
     let compiled_code = compile(parsed_content, contents);
     let boxed_code = Rc::new(compiled_code);
+    let env = global_env();
     return LuaRunState {
         file_path: String::from(lua_file_path),
         compiled_code: boxed_code.clone(),
-        current_frame: frame_from_code(boxed_code.clone(), global_env()),
+        current_frame: frame_from_code(boxed_code.clone(), env.clone()),
+	global_env: env,
         frame_stack: vec![],
 	packages: stdlib()
     };
