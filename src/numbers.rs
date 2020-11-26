@@ -19,7 +19,7 @@ pub fn unwrap_num_or_stringed_num(l: &LV) -> Result<f64, String> {
     }
 }
 
-pub fn lua_tonumber<'a>(_s: &LuaRunState<'a>, args: Option<LV<'a>>) -> LuaResult<'a> {
+pub fn lua_tonumber<'a>(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
     match unwrap_single_arg(args) {
 	Some(arg) => {
 	    match unwrap_num_or_stringed_num(&arg) {

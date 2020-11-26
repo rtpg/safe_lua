@@ -5,14 +5,14 @@ use eval::LuaExc;
 use eval::LV;
 use eval::LV::*;
 
-pub fn lua_binop_eq<'a>(l: &LV, r: &LV) -> LV<'a> {
+pub fn lua_binop_eq<'a>(l: &LV, r: &LV) -> LV {
     if lua_binop_eq_impl(l, r) {
 	return LuaTrue
     } else {
 	return LuaFalse
     }
 }
-pub fn lua_binop_neq<'a>(l: &LV, r: &LV) -> LV<'a> {
+pub fn lua_binop_neq<'a>(l: &LV, r: &LV) -> LV {
     if !lua_binop_eq_impl(l, r) {
 	return LuaTrue
     } else {
@@ -53,7 +53,7 @@ pub fn lua_binop_eq_impl(l: &LV, r: &LV) -> bool {
     }
 }
 
-pub fn lua_binop_leq<'a>(l: &LV, r: &LV) -> LV<'a> {
+pub fn lua_binop_leq<'a>(l: &LV, r: &LV) -> LV {
     if lua_binop_leq_impl(l, r) {
 	return LuaTrue
     } else {
@@ -81,7 +81,7 @@ pub fn lua_binop_leq_impl(l: &LV, r: &LV) -> bool {
 	}
     }
 }
-pub fn lua_exponent_eq<'a>(l: &LV, r: &LV) -> Result<LV<'a>, LuaExc> {
+pub fn lua_exponent_eq<'a>(l: &LV, r: &LV) -> Result<LV, LuaExc> {
     match l {
 	Num(ll) => {
 	    match r {
@@ -115,7 +115,7 @@ pub fn lua_exponent_eq<'a>(l: &LV, r: &LV) -> Result<LV<'a>, LuaExc> {
     }
 }
 
-pub fn lua_binop_minus<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
+pub fn lua_binop_minus<'a>(l: &LV, r: &LV) -> LV {
     match l {
 	Num(n) => {
 	    match r {
@@ -133,7 +133,7 @@ pub fn lua_binop_minus<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
     }
 }
 
-pub fn lua_binop_plus<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
+pub fn lua_binop_plus<'a>(l: &LV, r: &LV) -> LV {
     match l {
 	Num(n) => {
 	    match r {
@@ -152,7 +152,7 @@ pub fn lua_binop_plus<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
 }
 
 
-pub fn lua_binop_times<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
+pub fn lua_binop_times<'a>(l: &LV, r: &LV) -> LV {
     match l {
 	Num(n) => {
 	    match r {
@@ -170,7 +170,7 @@ pub fn lua_binop_times<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
     }
 }
 
-pub fn lua_binop_div<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+pub fn lua_binop_div<'a>(l: &LV, r: &LV) -> LuaResult {
     match (l, r) {
 	(Num(n), Num(m)) => {
 	    Ok(LV::Num(n/m))
@@ -179,7 +179,7 @@ pub fn lua_binop_div<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
     }
 }
 
-pub fn lua_binop_floordiv<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+pub fn lua_binop_floordiv<'a>(l: &LV, r: &LV) -> LuaResult {
     match (l, r) {
 	(Num(n), Num(m)) => {
 	    let result = n/m;
@@ -189,7 +189,7 @@ pub fn lua_binop_floordiv<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
     }
 }
 
-pub fn lua_binop_mod<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
+pub fn lua_binop_mod<'a>(l: &LV, r: &LV) -> LV {
     match l {
 	Num(n) => {
 	    match r {
@@ -213,7 +213,7 @@ pub fn lua_binop_mod<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
     }
 }
 
-pub fn lua_binop_and<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
+pub fn lua_binop_and<'a>(l: &LV, r: &LV) -> LV {
     // lua considers false and nil to be falsy
     // everything else is truthy
     // and returns first operator if it is falsy, second otherwise
@@ -224,7 +224,7 @@ pub fn lua_binop_and<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
     }
 }
 
-pub fn lua_binop_or<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
+pub fn lua_binop_or<'a>(l: &LV, r: &LV) -> LV {
     // The result of the or operator is its first operand if it is not false;
     // otherwise, the result is its second operand
     if lua_truthy(&l){
@@ -234,7 +234,7 @@ pub fn lua_binop_or<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
     }
 }
 
-pub fn lua_binop_less<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
+pub fn lua_binop_less<'a>(l: &LV, r: &LV) -> LV {
     match l {
 	Num(n) => {
 	    match r {
@@ -256,7 +256,7 @@ pub fn lua_binop_less<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
     }
 }
 
-pub fn lua_binop_greater<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+pub fn lua_binop_greater<'a>(l: &LV, r: &LV) -> LuaResult {
     match (l, r) {
 	(Num(n), Num(m)) => {
 	    Ok(if n > m {
@@ -288,7 +288,7 @@ fn try_convert_i32(f: f64) -> Result<i32, String> {
 
 use numbers::unwrap_num_or_stringed_num;
 
-pub fn lua_binop_lshift<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+pub fn lua_binop_lshift<'a>(l: &LV, r: &LV) -> LuaResult {
     match (
 	unwrap_num_or_stringed_num(l),
 	unwrap_num_or_stringed_num(r),
@@ -306,7 +306,7 @@ pub fn lua_binop_lshift<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
     }
 }
 
-pub fn lua_binop_rshift<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+pub fn lua_binop_rshift<'a>(l: &LV, r: &LV) -> LuaResult {
     match (
 	unwrap_num_or_stringed_num(l),
 	unwrap_num_or_stringed_num(r),
@@ -324,7 +324,7 @@ pub fn lua_binop_rshift<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
     }
 }
 
-pub fn lua_binop_binor<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+pub fn lua_binop_binor<'a>(l: &LV, r: &LV) -> LuaResult {
     match (
 	unwrap_num_or_stringed_num(l),
 	unwrap_num_or_stringed_num(r),
@@ -342,7 +342,7 @@ pub fn lua_binop_binor<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
     }
 }
 
-pub fn lua_binop_binand<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+pub fn lua_binop_binand<'a>(l: &LV, r: &LV) -> LuaResult {
     match (
 	unwrap_num_or_stringed_num(l),
 	unwrap_num_or_stringed_num(r),
@@ -360,7 +360,7 @@ pub fn lua_binop_binand<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
     }
 }
 
-pub fn lua_binop_binxor<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+pub fn lua_binop_binxor<'a>(l: &LV, r: &LV) -> LuaResult {
     match (
 	unwrap_num_or_stringed_num(l),
 	unwrap_num_or_stringed_num(r),
@@ -378,7 +378,7 @@ pub fn lua_binop_binxor<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
     }
 }
 
-pub fn lua_binop_concat<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
+pub fn lua_binop_concat<'a>(l: &LV, r: &LV) -> LV {
     // We can concatenate two strings with the concatenation operator .. (two dots).
     // If any operand is a number, Lua converts this number to a string:
     let left_value = match &l {

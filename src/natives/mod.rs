@@ -8,7 +8,7 @@ use super::eval::{
 };
 
 
-pub fn unwrap_single_arg<'a>(args: Option<LV<'a>>) -> Option<LV<'a>> {
+pub fn unwrap_single_arg<'a>(args: Option<LV>) -> Option<LV> {
     // helper to unwrap a single arg from args
     match args {
 	Some(LV::LuaList(req_args)) => {
@@ -43,7 +43,7 @@ pub fn lua_truthy(elt: &LV) -> bool {
     }
 }
 
-pub fn lua_assert<'a, 'b>(_s: &LuaRunState, args: Option<LV<'a>>) -> LuaResult<'a> {
+pub fn lua_assert(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
     match unwrap_single_arg(args){
 	Some(arg) => {
 	    if lua_truthy(&arg) {
@@ -68,7 +68,7 @@ pub fn lua_fmt_for_print(arg: &LV) -> String {
 	}
     }
 }
-pub fn lua_print<'a>(_s: &LuaRunState, args: Option<LV>) -> LuaResult<'a> {
+pub fn lua_print(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
     match unwrap_single_arg(args){
 	Some(arg) => {
 	    println!("{}", lua_fmt_for_print(&arg));
@@ -80,7 +80,7 @@ pub fn lua_print<'a>(_s: &LuaRunState, args: Option<LV>) -> LuaResult<'a> {
     }
 }
 
-fn lua_type_internal<'a>(arg: LV) -> String {
+fn lua_type_internal(arg: LV) -> String {
     match arg {
 	LV::LuaTrue => "boolean".to_string(),
 	LV::LuaFalse => "boolean".to_string(),
@@ -96,7 +96,7 @@ fn lua_type_internal<'a>(arg: LV) -> String {
 	}
     }
 }
-pub fn lua_type<'a>(_s: &LuaRunState, args: Option<LV>) -> LuaResult<'a> {
+pub fn lua_type<'a>(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
     match unwrap_single_arg(args){
 	Some(arg) => {
 	    let type_name = lua_type_internal(arg);
@@ -107,7 +107,7 @@ pub fn lua_type<'a>(_s: &LuaRunState, args: Option<LV>) -> LuaResult<'a> {
 	}
     }
 }
-pub fn lua_require<'a>(s: &LuaRunState<'a>, args: Option<LV<'a>>) -> LuaResult<'a> {
+pub fn lua_require<'a>(s: &LuaRunState, args: Option<LV>) -> LuaResult {
     match unwrap_single_arg(args) {
 	Some(arg) => {
 	    match arg {

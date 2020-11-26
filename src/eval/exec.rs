@@ -38,7 +38,7 @@ macro_rules! vm_panic {
     }
 }
 
-fn unwrap_or_vm_panic<'a, 'b>(s: &'b LuaRunState<'a>, val: LuaResult<'a>) -> LV<'a> {
+fn unwrap_or_vm_panic(s: &LuaRunState, val: LuaResult) -> LV {
     // open up a result, but panic if it failed
     match val {
 	Err(err) => {
@@ -48,14 +48,14 @@ fn unwrap_or_vm_panic<'a, 'b>(s: &'b LuaRunState<'a>, val: LuaResult<'a>) -> LV<
     }
 }
 
-fn print_and_push<'a>(stack: &mut LuaValueStack<'a>, val: LV<'a>) {
+fn print_and_push(stack: &mut LuaValueStack, val: LV) {
     if DBG_POP_PUSH {
 	println!("PUSH => {}", val);
     }
     stack.values.push(val);
 }
 
-pub fn exec_until_done<'a, 'b>(s: &'b mut LuaRunState<'a>) -> ExecResult {
+pub fn exec_until_done<'b>(s: &'b mut LuaRunState) -> ExecResult {
     // run the state until we hit a done state
     // this will error out on yields etc
     loop {
@@ -69,11 +69,11 @@ pub fn exec_until_done<'a, 'b>(s: &'b mut LuaRunState<'a>) -> ExecResult {
     }
 }
 
-fn push<'a>(s: &mut LuaRunState<'a>, v: LV<'a>) {
+fn push<'a>(s: &mut LuaRunState, v: LV) {
     print_and_push(&mut s.current_frame.stack, v);
 }
     
-pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Option<u8>) -> ExecResult {
+pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState, _yield_result: Option<u8>) -> ExecResult {
     // Move the machine forward until we hit the next yield
     macro_rules! pop {
 	() => {
@@ -90,7 +90,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
     }
 
     // fail the system
-    fn lua_fail<'a>(s: &mut LuaRunState<'a>, msg: &'static str){
+    fn lua_fail(s: &mut LuaRunState, msg: &'static str){
 	println!("!! failed with message {}", msg);
 	let f = &s.current_frame;
 	let (line_no, lines) = f.code.sourcemap.get_lines_for_bytecode(f.pc);
@@ -99,7 +99,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 	panic!(msg);
     }
 
-    fn peek<'a, 'b>(s: &'a LuaRunState<'b>) -> &'a LV<'b> {
+    fn peek(s: &LuaRunState) -> &LV {
 	let len = s.current_frame.stack.values.len() - 1;
 	match &s.current_frame.stack.values.get(len) {
 	    Some(v) => v, // TODO noclone
@@ -424,7 +424,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
     }
 }
 
-fn handle_native_call<'a, 'b>(s: &'b mut LuaRunState<'a>, f: LuaNative<'a>, args: LV<'a>) {
+fn handle_native_call<'a, 'b>(s: &'b mut LuaRunState, f: LuaNative, args: LV) {
     // call a native function, and do all the proper error handling from it 
     let return_value = f(s, Some(args));
     match return_value {

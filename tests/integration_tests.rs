@@ -10,7 +10,7 @@ use safe_lua::{
 use std::fs::File;
 use std::io::Read;
 
-pub fn load_file<'a>(file_path: &'a str, contents: &'a str) -> LuaRunState<'a> {
+pub fn load_file<'a>(file_path: &'a str, contents: &'a str) -> LuaRunState {
     return initial_run_state(contents, file_path);
 }
 

@@ -25,28 +25,28 @@ const DBG_POP_PUSH: bool = false;
 
 // the type for native Lua functions
 pub type LuaErr = String;
-pub type LuaResult<'a> = Result<LV<'a>, LuaErr>;
-pub type LuaNative<'a> = fn(&LuaRunState<'a>, Option<LV<'a>>) -> LuaResult<'a>;
+pub type LuaResult = Result<LV, LuaErr>;
+pub type LuaNative = fn(&LuaRunState, Option<LV>) -> LuaResult;
 
 // our Lua values
 #[derive(Clone)]
-pub enum LV<'a> {
+pub enum LV {
     Num(f64),
     LuaS(String),
-    LuaList(Vec<LV<'a>>),
+    LuaList(Vec<LV>),
     LuaTable {
-	v: HashMap<String, LV<'a>>
+	v: HashMap<String, LV>
     },
     NativeFunc {
 	name: String,
-	f: LuaNative<'a>,
+	f: LuaNative,
     },
     LuaFunc {
 	code_idx: usize,
 	code: Rc<CodeObj>,
 	args: ast::Namelist,
 	ellipsis: bool,
-	parent_env: LuaEnv<'a>,
+	parent_env: LuaEnv,
     },
     // INTERNAL VALUES 
     // This code index value is just becauze I have usize
@@ -109,20 +109,20 @@ fn lv_fmt(lv: &LV, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 	}
     }
 }
-impl<'a> std::fmt::Debug for LV<'a> {
+impl<'a> std::fmt::Debug for LV {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 	lv_fmt(self, f)
     }
 }
-impl<'a> std::fmt::Display for LV<'a> {
+impl<'a> std::fmt::Display for LV {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 	lv_fmt(self, f)
     }
 }
 
-impl<'a> PartialEq for LV<'a> {
+impl<'a> PartialEq for LV {
     
-    fn eq(&self, other: &LV<'a>) -> bool {
+    fn eq(&self, other: &LV) -> bool {
 	match self {
 	    LV::Num(s) => match other {
 		LV::Num(o) => s == o,
@@ -139,29 +139,29 @@ impl<'a> PartialEq for LV<'a> {
     }
 }
 #[derive(Clone)]
-pub struct LuaValueStack<'a> {
-    values: Vec<LV<'a>>,
+pub struct LuaValueStack {
+    values: Vec<LV>,
 }
 
-impl<'a> LuaValueStack<'a> {
-    fn push(&mut self, val: LV<'a>){
+impl LuaValueStack {
+    fn push(&mut self, val: LV){
 	self.values.push(val);
     }
     #[allow(dead_code)]
-    fn pop(&mut self) -> Option<LV<'a>> {
+    fn pop(&mut self) -> Option<LV> {
 	return self.values.pop();
     }
 }
 
 #[derive(Debug, Clone)]
-struct LuaEnvData<'a> {
+struct LuaEnvData {
     // pretty sure there's a way to set this up without requiring Rc's here as well...
-    _values: Rc<RefCell<HashMap<String, LV<'a>>>>,
-    parent: Option<Rc<RefCell<LuaEnvData<'a>>>>,
+    _values: Rc<RefCell<HashMap<String, LV>>>,
+    parent: Option<Rc<RefCell<LuaEnvData>>>,
 }
 
-impl <'a> LuaEnvData<'a> {
-    fn get(&self, name: &str) -> Option<LV<'a>> {
+impl LuaEnvData {
+    fn get(&self, name: &str) -> Option<LV> {
 	// either the value is in the top sourcemap or it's in the parent somewhere
 	let v = self._values.borrow();
 	let maybe_val = v.get(name);
@@ -180,12 +180,12 @@ impl <'a> LuaEnvData<'a> {
     }
 }
 #[derive(Debug, Clone)]
-pub struct LuaEnv<'a> {
-    data: Rc<RefCell<LuaEnvData<'a>>>,
+pub struct LuaEnv {
+    data: Rc<RefCell<LuaEnvData>>,
 }
 
-impl<'a> LuaEnv<'a> {
-    fn new(values: HashMap<String, LV<'a>>, parent: Option<LuaEnv<'a>>) -> LuaEnv<'a>{
+impl LuaEnv {
+    fn new(values: HashMap<String, LV>, parent: Option<LuaEnv>) -> LuaEnv {
 	let new_parent = match parent {
 	    None => None,
 	    Some(env) => Some(env.data.clone())
@@ -201,14 +201,14 @@ impl<'a> LuaEnv<'a> {
 	    ))
 	}
     }
-    fn set(&mut self, name: String, val: LV<'a>){
+    fn set(&mut self, name: String, val: LV){
 	self.data.borrow_mut()._values.borrow_mut().insert(name, val);
     }
-    fn get(&self, name: &str) -> Option<LV<'a>> {
+    fn get(&self, name: &str) -> Option<LV> {
 	return self.data.borrow().get(name);
     }
 
-    fn make_child_env(&self) -> LuaEnv<'a> {
+    fn make_child_env(&self) -> LuaEnv {
 	// this makes a new environment that has self as a parent
 	// so lookups will go through it (basically local scope from global)
 	return LuaEnv {
@@ -221,18 +221,18 @@ impl<'a> LuaEnv<'a> {
 }
 
 #[derive(Clone)]
-pub struct LuaFrame<'a>{
+pub struct LuaFrame {
     // This is a single frame, that includes the environment etc
     // calling into another function will build a frame that will
     // execute whatever needs to be executed
     pub code: Rc<CodeObj>, // the code itself
     pub pc: usize, // program counter
-    stack: LuaValueStack<'a>, // value stack
-    env: LuaEnv<'a>,
+    stack: LuaValueStack, // value stack
+    env: LuaEnv,
 }
 
-impl<'a> LuaFrame<'a> {
-    fn assign_args(&mut self, arglist: Vec<String>, args: LV<'a>){
+impl LuaFrame {
+    fn assign_args(&mut self, arglist: Vec<String>, args: LV){
 	// we want to take every argument in the arglist and set it into the environment
 	// as locals
 	match args {
@@ -254,22 +254,22 @@ impl<'a> LuaFrame<'a> {
 }
 
 #[allow(dead_code)]
-pub struct LuaRunState<'a> {
+pub struct LuaRunState {
     /*
     * store the current state of a program 
     */
     pub file_path: String,
     compiled_code: Rc<CodeObj>,
-    pub global_env: LuaEnv<'a>,
+    pub global_env: LuaEnv,
     // frame we are executing on
-    pub current_frame: LuaFrame<'a>,
+    pub current_frame: LuaFrame,
     // stack of frames (doesn't include existing frame)
-    frame_stack: Vec<LuaFrame<'a>>,
-    pub packages: HashMap<String, LV<'a>>,
+    frame_stack: Vec<LuaFrame>,
+    pub packages: HashMap<String, LV>,
 }
 
-impl<'a> LuaRunState<'a> {
-    fn enter_function_call(&mut self, func: LV<'a>, provided_args: LV<'a>) {
+impl<'a> LuaRunState {
+    fn enter_function_call(&mut self, func: LV, provided_args: LV) {
 	// set up a new lua frame as the top level func and work from there
 	match func {
 	    LV::LuaFunc {code, args, ellipsis, parent_env, ..} => {
@@ -289,7 +289,7 @@ impl<'a> LuaRunState<'a> {
 	}
     }
 
-    fn return_from_funccall(&mut self, return_value: LV<'a>) {
+    fn return_from_funccall(&mut self, return_value: LV) {
 	// set up the return of the func call in the above frame and then execute further
 	// we'll first prep the frame
 	let mut previous_frame = self.frame_stack.pop().unwrap();
@@ -318,7 +318,7 @@ pub fn run_to_checkpoint(state: LuaRunState) -> RunResult {
     return RunResult::Error(String::from("Yikes"));
 }
 
-pub fn global_env<'a>() -> LuaEnv<'a> {
+pub fn global_env() -> LuaEnv {
     macro_rules! global {
 	($name: expr, $func: expr) => {
 	    ($name.to_string(), LV::NativeFunc {
@@ -328,7 +328,7 @@ pub fn global_env<'a>() -> LuaEnv<'a> {
 	}
     }
     
-    let globals: Vec<(String, LV<'a>)> = vec![
+    let globals: Vec<(String, LV)> = vec![
 	global!("print", lua_print),
 	global!("require", lua_require),
 	global!("assert", lua_assert),
@@ -338,7 +338,7 @@ pub fn global_env<'a>() -> LuaEnv<'a> {
 
     return LuaEnv::new(globals.iter().cloned().collect(), None);
 }
-pub fn frame_from_code<'a>(code:Rc<CodeObj>, env: LuaEnv<'a>) -> LuaFrame<'a> {
+pub fn frame_from_code<'a>(code:Rc<CodeObj>, env: LuaEnv) -> LuaFrame {
     return LuaFrame {
         code: code,
         pc: 0,
@@ -350,7 +350,7 @@ pub fn frame_from_code<'a>(code:Rc<CodeObj>, env: LuaEnv<'a>) -> LuaFrame<'a> {
 }
 
 
-pub fn initial_run_state<'a>(contents: &'a str, lua_file_path: &'a str) -> LuaRunState<'a> {
+pub fn initial_run_state<'a>(contents: &'a str, lua_file_path: &'a str) -> LuaRunState {
 
     let parsed_content = parse(contents);
     let compiled_code = compile(parsed_content, contents);
