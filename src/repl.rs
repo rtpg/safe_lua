@@ -11,6 +11,8 @@ use std::io::Write;
 const starting_snippet: &'static str = "
 print 'Starting REPL';
 ";
+
+#[allow(unused_must_use)]
 pub fn do_repl() {
     let mut run_state = eval::initial_run_state(
 	starting_snippet,

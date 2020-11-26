@@ -1,3 +1,4 @@
+use eval::LuaNative;
 use natives::lua_truthy;
 use eval::DBG_POP_PUSH;
 use eval::DBG_PRINT_INSTRUCTIONS;
@@ -56,6 +57,10 @@ pub fn exec_until_done<'a, 'b>(s: &'b mut LuaRunState<'a>) -> ExecResult {
     }
 }
 
+fn push<'a>(s: &mut LuaRunState<'a>, v: LV<'a>) {
+    print_and_push(&mut s.current_frame.stack, v);
+}
+    
 pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Option<u8>) -> ExecResult {
     // Move the machine forward until we hit the next yield
     macro_rules! pop {
@@ -82,10 +87,6 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 	panic!(msg);
     }
 
-    fn push<'a>(s: &mut LuaRunState<'a>, v: LV<'a>) {
-	print_and_push(&mut s.current_frame.stack, v);
-    }
-    
     fn peek<'a, 'b>(s: &'a LuaRunState<'b>) -> &'a LV<'b> {
 	let len = s.current_frame.stack.values.len() - 1;
 	match &s.current_frame.stack.values.get(len) {
@@ -323,8 +324,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 		// let's actually call the function
 		match m_func {
 		    LV::NativeFunc {name: _name, f} => {
-			let return_value = f(s, Some(args));
-			push(s, return_value);
+			handle_native_call(s, f, args);
 		    },
 		    LV::LuaFunc {..} => {
 			// we queue up the new frame to continue executing
@@ -401,4 +401,10 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 	    }
 	}
     }
+}
+
+fn handle_native_call<'a, 'b>(s: &'b mut LuaRunState<'a>, f: LuaNative<'a>, args: LV<'a>) {
+    // call a native function, and do all the proper error handling from it 
+    let return_value = f(s, Some(args));
+    push(s, return_value);
 }

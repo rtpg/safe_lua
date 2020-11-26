@@ -270,7 +270,7 @@ pub fn lua_binop_concat<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
     // If any operand is a number, Lua converts this number to a string:
     let left_value = match &l {
 	LuaS(s) => s.to_string(),
-	Num(n) => lua_fmt_for_print(&l),
+	Num(_n) => lua_fmt_for_print(&l),
 	_ => {
 	    dbg!(l);
 	    panic!("invalid operand for concat");
@@ -278,7 +278,7 @@ pub fn lua_binop_concat<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
     };
     let right_value = match &r {
 	LuaS(s) => s.to_string(),
-	Num(n) => lua_fmt_for_print(&r),
+	Num(_n) => lua_fmt_for_print(&r),
 	_ => {
 	    dbg!(r);
 	    panic!("invalid operand for concat");

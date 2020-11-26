@@ -22,6 +22,11 @@ use super::lua_stdlib::stdlib;
 const DBG_PRINT_INSTRUCTIONS: bool = false;
 const DBG_POP_PUSH: bool = false;
 
+// the type for native Lua functions
+pub type LuaErr = String;
+pub type LuaResult<'a> = Result<LV<'a>, LuaErr>;
+pub type LuaNative<'a> = fn(&LuaRunState<'a>, Option<LV<'a>>) -> LV<'a>;
+
 // our Lua values
 #[derive(Clone)]
 pub enum LV<'a> {
@@ -33,7 +38,7 @@ pub enum LV<'a> {
     },
     NativeFunc {
 	name: String,
-	f: fn(&LuaRunState<'a>, Option<LV<'a>>) -> LV<'a>
+	f: LuaNative<'a>,
     },
     LuaFunc {
 	code_idx: usize,
@@ -55,8 +60,6 @@ pub enum LV<'a> {
     LuaTrue,
     LuaFalse,
 }
-
-pub type LuaErr = String;
 
 #[derive(Debug)]
 pub struct LuaExc {

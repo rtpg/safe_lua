@@ -1,8 +1,5 @@
 #[allow(dead_code)]
 
-use ast::Expr::UnOp;
-use ast::Expr::BinOp;
-use ast::Expr::Pref;
 use nom_locate::LocatedSpan;
 use lex::{
     LexValue
@@ -209,7 +206,13 @@ pub enum Expr<'a> {
 }
 
 impl<'a> Expr<'a> {
+}
+
+
+#[cfg(test)]
+impl<'a> Expr<'a> {
     pub fn new_name<'b>(name: &'b str, loc: LocatedSpan<&'a str>) -> Expr<'a> {
+	use ast::Expr::Pref;
 	return Pref(
 	    Box::new(
 		Prefixexpr {
@@ -228,13 +231,15 @@ impl<'a> Expr<'a> {
     }
 
     pub fn unary<'b>(op: &'b str, inner: Expr<'a>) -> Expr<'a> {
+	use ast::Expr::UnOp;
 	return UnOp(
 	    op.to_string(),
 	    Box::new(inner),
 	)
     }
- 
+
     pub fn binop<'b>(l: Expr<'a>,op: &'b str, r: Expr<'a>) -> Expr<'a> {
+	use ast::Expr::BinOp;
 	return BinOp(
 	    Box::new(l),
 	    LexValue::Keyword(op.to_string()),
@@ -242,6 +247,7 @@ impl<'a> Expr<'a> {
 	)
     }
 }
+
 impl<'a, 'b> HasLoc<'a, 'b> for Expr<'a> {
     fn loc(&'b self) -> LocatedSpan<&'a str> {
 	use ast::Expr::*;

@@ -581,36 +581,6 @@ fn table_constructor<'a,'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, (ast
     );
 }
 
-
-fn unary_op<'a,'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, String>{
-    let (i, result) = alt((
-        kwd("#"),
-        kwd("-"),
-        kwd("not"),
-        kwd("~"),
-    ))(i)?;
-
-    match result {
-	Lex {val: Keyword(k), .. } => {
-            return Ok((i, k));
-        },
-        _ => {
-            panic!("Impossible code path");
-        }
-    }
-}
-
-
-// fn binop_right<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, (ast::BinaryOperator, ast::Expr<'a>)> {
-//     // order of operations defined at 
-//     // https://www.lua.org/manual/5.3/manual.html#3.4.8
-//     // (order reversed both vertically and horizontally)
-//     let (i, operator) = (i)?;
-//     let (i, right_expr) = expr(i)?;
-//     return Ok((i,
-//     (operator.val, right_expr)));
-// }
-
 /**
  * Attempt parsing a string, return None if it fails
  *
