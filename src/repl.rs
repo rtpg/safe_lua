@@ -8,14 +8,14 @@ use eval::exec::{
 use std::io;
 use std::io::Write;
 
-const starting_snippet: &'static str = "
+const STARTING_SNIPPET: &'static str = "
 print 'Starting REPL';
 ";
 
 #[allow(unused_must_use)]
 pub fn do_repl() {
     let mut run_state = eval::initial_run_state(
-	starting_snippet,
+	STARTING_SNIPPET,
 	"<repl>",
     );
 

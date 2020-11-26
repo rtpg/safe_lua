@@ -60,6 +60,7 @@ pub struct Lex<'a> {
 }
 
 impl<'a> Lex<'a> {
+    #[cfg(test)]
     pub fn kwd(s: String, loc: Option<LocatedSpan<&'a str>>) -> Lex<'a> {
 	let location = if loc.is_some() {
 	    loc.unwrap()

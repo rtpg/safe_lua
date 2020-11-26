@@ -10,6 +10,7 @@ use repl::do_repl;
 use argh::FromArgs;
 #[macro_use]
 mod macros;
+pub mod numbers;
 mod eval;
 mod ast;
 mod parse;
@@ -28,6 +29,8 @@ mod repl;
 struct MainOpts {
     #[argh(positional, description="the script to run")]
     script: Option<String>,
+    #[argh(option, description="a single command to run")]
+    command: Option<String>,
     #[argh(switch, description="just show me the bytecode")]
     bytecode: bool,
     #[argh(switch, description="run the REPL")]
@@ -44,14 +47,28 @@ fn main(){
 	// the repl should be a loop
 	panic!("We shouldn't ever reach this point");
     }
-    // if we got here then we're going to be running a script
-    if opts.script.is_none(){
-	panic!("Missing the script argument");
-    }
-    let filepath = opts.script.unwrap();
-    let mut file = File::open(&filepath).unwrap();
+
+    let filepath;
     let mut contents = String::new();
-    file.read_to_string(&mut contents).unwrap();
+    // if we got here then we're going to be running a script
+    // let's get the content of what we want to run
+    match (opts.script, opts.command) {
+	(Some(_), Some(_)) => {
+	    panic!("You should only pass in the script or the command option, not both")
+	},
+	(None, None) => {
+	    panic!("Pass in either the script or the command")
+	}
+	(Some(passed_in_filepath), None) => {
+	    filepath = passed_in_filepath;
+	    let mut file = File::open(&filepath).unwrap();
+	    file.read_to_string(&mut contents).unwrap();
+	},
+	(None, Some(provided_command)) => {
+	    filepath = "from_commandline".to_string();
+	    contents = provided_command;
+	}
+    }
     println!("Starting lex");
     let contents_lex = lex::LexInput::new(&contents);
     let lex_result = lex::lex_all(contents_lex);

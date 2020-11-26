@@ -136,16 +136,15 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 	    },
 	    BC::JUMP_FALSE(tgt) => {
 		let check = pop!();
-		match check {
-		    LV::LuaFalse => {
-			// jump to the table
-			intended_next_pc = Some(tgt.clone());
-		    },
-		    _ => {
-			// we will not jump here and just let the system go to the next spot
-		    }
+		if !lua_truthy(&check) {
+		    // jump to the target
+		    intended_next_pc = Some(tgt.clone());
 		}
-	    }
+	    },
+	    BC::ASSIGN_LOCAL_NIL(_) => {
+		// for now, do nothing
+		// basically later we'll want to implement scoping correctly here
+	    },
             BC::PUSH_NIL => {
 		push(s, LV::LuaNil);
 	    },
@@ -220,6 +219,7 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
                 let l = pop!();
 		let result = match binop.as_ref() {
 		    "==" => lua_binop_eq(&l, &r),
+		    "~=" => lua_binop_neq(&l, &r),
 		    "^" => {
 			match lua_exponent_eq(&l, &r){
 			    Ok(v) => v,
@@ -360,6 +360,9 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 	    BC::PANIC(err_msg) => {
 		dbg!(err_msg);
 		vm_panic!(s, "Lua panic opcode");
+	    },
+	    BC::JUMP(new_location) => {
+		intended_next_pc = Some(new_location.clone());
 	    },
 	    BC::RETURN_VALUE => {
 		let return_value = pop!();

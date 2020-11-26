@@ -12,5 +12,5 @@ fn test_sourcemaps(){
 
     sm.write_map(0, loc_0);
 
-    assert_eq!(sm.get_location(0), SourcemapLoc::new(1));
+    assert_eq!(sm.get_location(0).unwrap(), SourcemapLoc::new(1));
 }

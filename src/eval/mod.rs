@@ -1,6 +1,7 @@
 #[macro_use]
 #[allow(dead_code)]
 pub mod exec;
+use numbers::lua_tonumber;
 use natives::lua_type;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -332,6 +333,7 @@ pub fn global_env<'a>() -> LuaEnv<'a> {
 	global!("require", lua_require),
 	global!("assert", lua_assert),
 	global!("type", lua_type),
+	global!("tonumber", lua_tonumber),
     ];
 
     return LuaEnv::new(globals.iter().cloned().collect(), None);

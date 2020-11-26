@@ -11,7 +11,12 @@ pub fn display_code_block<'a>(obj: &CodeObj){
     let mut prev_line = 0;
     for (bc_idx, elt) in obj.bytecode.iter().enumerate() {
 	let loc = obj.sourcemap.get_location(bc_idx);
-	let loc_line: usize = loc.location_line().try_into().unwrap();
+
+	
+	let loc_line: usize = match loc {
+	    Some(l) => l.location_line().try_into().unwrap(),
+	    None => 0 // 0 should make the line not show up
+	};
 	let display_line = loc_line > prev_line;
 	if display_line {
 	    // this is a new line so we'll show it

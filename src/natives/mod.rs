@@ -8,7 +8,7 @@ use super::eval::{
 };
 
 
-fn unwrap_single_arg<'a>(args: Option<LV<'a>>) -> Option<LV<'a>> {
+pub fn unwrap_single_arg<'a>(args: Option<LV<'a>>) -> Option<LV<'a>> {
     // helper to unwrap a single arg from args
     match args {
 	Some(LV::LuaList(req_args)) => {

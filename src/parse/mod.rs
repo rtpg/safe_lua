@@ -601,6 +601,7 @@ pub fn try_parse<'a>(input: &'a str) -> Result<ast::Block<'a>, String> {
     return Ok(b);
 }
 
+#[cfg(test)]
 pub fn try_specific_parse<'a, 'b, ParseType>(
     parser: impl for<'c> Fn(&'c IStream<'a>)
 				-> IResult<&'c IStream<'a>, ParseType>,

@@ -177,26 +177,32 @@ impl Sourcemap {
 	self.map_data[bytecode_position] = SourcemapLoc::from_span(location)
     }
 
-    pub fn get_location(&self, bytecode_position: usize) -> SourcemapLoc {
+    pub fn get_location(&self, bytecode_position: usize) -> Option<SourcemapLoc> {
 	// take the bytecode position and get
+	// this really should always return but there's some bugs here to work out
+	// (basically sometimes we seem to not be populating the sourcemap cleanly)
 	match self.map_data.get(bytecode_position) {
-	    Some(loc) => *loc,
+	    Some(loc) => Some(*loc),
 	    None => {
 		// basically this gets called on the lines at the end of a trace, so just
 		// return the last one
 		// (this is hacky and dumb)
-		self.map_data[self.map_data.len()-1]
+		if self.map_data.len() == 0 {
+		    return None
+		    // panic!("Called get_location on an empty map");
+		}
+		Some(self.map_data[self.map_data.len()-1])
 	    }
 	}
     }
     pub fn get_lines_for_bytecode(&self, bytecode_position: usize) -> (usize, String) {
 	let loc = self.get_location(bytecode_position);
-	let loc_line: usize = loc.location_line().try_into().unwrap();
+	let loc_line: usize = loc.unwrap().location_line().try_into().unwrap();
 	return (loc_line, self.get_line(loc_line));
     }
     
     pub fn get_line(&self, source_line: usize) -> String {
-	match self.source_by_line.get(source_line-1) {
+	match self.source_by_line.get(if source_line > 0 {source_line-1} else { 0 }) {
 	    Some(txt) => txt.to_string(),
 	    None => "OUT OF BOUNDS SOURCEMAP".to_string(),
 	}

@@ -12,6 +12,13 @@ pub fn lua_binop_eq<'a>(l: &LV, r: &LV) -> LV<'a> {
 	return LuaFalse
     }
 }
+pub fn lua_binop_neq<'a>(l: &LV, r: &LV) -> LV<'a> {
+    if !lua_binop_eq_impl(l, r) {
+	return LuaTrue
+    } else {
+	return LuaFalse
+    }
+}
 pub fn lua_binop_eq_impl(l: &LV, r: &LV) -> bool {
     
     match l {
@@ -269,7 +276,6 @@ pub fn lua_binop_greater<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
     }
 }
 
-use std::convert::TryFrom;
 
 fn try_convert_i32(f: f64) -> Result<i32, String> {
     let cast_result = f as i32;
@@ -280,19 +286,7 @@ fn try_convert_i32(f: f64) -> Result<i32, String> {
     }
 }
 
-fn unwrap_num_or_stringed_num(l: &LV) -> Result<f64, String> {
-    // takes a number or a string and tries to unwrap it
-    match l {
-	Num(n) => Ok(*n),
-	LuaS(s) => {
-	    match s.parse::<f64>() {
-		Ok(result) => Ok(result),
-		Err(_) => Err("not a number".to_string())
-	    }
-	},
-	_ => Err("not a number".to_string())
-    }
-}
+use numbers::unwrap_num_or_stringed_num;
 
 pub fn lua_binop_lshift<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
     match (
