@@ -1,3 +1,4 @@
+use eval::LuaResult;
 use natives::lua_fmt_for_print;
 use natives::lua_truthy;
 use eval::LuaExc;
@@ -12,7 +13,7 @@ pub fn lua_binop_eq<'a>(l: &LV, r: &LV) -> LV<'a> {
     }
 }
 pub fn lua_binop_eq_impl(l: &LV, r: &LV) -> bool {
-
+    
     match l {
 	LuaNil => {
 	    matches!(r, LuaNil)
@@ -33,11 +34,15 @@ pub fn lua_binop_eq_impl(l: &LV, r: &LV) -> bool {
 		_ => false
 	    }
 	},
-	_ => {
-	    dbg!(l);
-	    dbg!(r);
-	    panic!("need binop impl");
-	}
+	LuaTrue => matches!(r, LuaTrue),
+	LuaFalse => matches!(r, LuaFalse),
+	LuaList(_) => todo!(),
+	LuaTable {..} => todo!(),
+	LuaFunc {..} => todo!(),
+	CodeIndex(_) => todo!(),
+	Code(_) => todo!(),
+	NameList(_,_) => todo!(),
+	NativeFunc {..} => todo!(),
     }
 }
 
@@ -158,21 +163,22 @@ pub fn lua_binop_times<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
     }
 }
 
-pub fn lua_binop_div<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
-    match l {
-	Num(n) => {
-	    match r {
-		Num(m) => {
-		    LV::Num(n / m)
-		},
-		_ => panic!("FAILURE (need to implement lua-bubbling failure)")
-	    } 
+pub fn lua_binop_div<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+    match (l, r) {
+	(Num(n), Num(m)) => {
+	    Ok(LV::Num(n/m))
 	},
-	_ => {
-	    dbg!(l);
-	    dbg!(r);
-	    panic!("need binop impl");
-	}
+	_ => Err(format!("Cant divide {} and {}", l, r))
+    }
+}
+
+pub fn lua_binop_floordiv<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+    match (l, r) {
+	(Num(n), Num(m)) => {
+	    let result = n/m;
+	    Ok(LV::Num(result.floor()))
+	},
+	_ => Err(format!("Cant divide {} and {}", l, r))
     }
 }
 
@@ -243,25 +249,138 @@ pub fn lua_binop_less<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
     }
 }
 
-pub fn lua_binop_greater<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
-    match l {
-	Num(n) => {
-	    match r {
-		Num(m) => {
-		    if n > m {
-			LV::LuaTrue
-		    } else {
-			LV::LuaFalse
-		    }
-		},
-		_ => panic!("FAILURE (need to implement lua-bubbling failure)")
-	    } 
+pub fn lua_binop_greater<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+    match (l, r) {
+	(Num(n), Num(m)) => {
+	    Ok(if n > m {
+		LV::LuaTrue
+	    } else {
+		LV::LuaFalse
+	    })
 	},
-	_ => {
-	    dbg!(l);
-	    dbg!(r);
-	    panic!("need binop impl");
+	(LuaS(s), LuaS(t)) => {
+	    Ok(if s > t {
+		LV::LuaTrue
+	    } else {
+		LV::LuaFalse
+	    })
 	}
+	_ => Err(format!("Attempt to compare {} and {}", l, r))
+    }
+}
+
+use std::convert::TryFrom;
+
+fn try_convert_i32(f: f64) -> Result<i32, String> {
+    let cast_result = f as i32;
+    if f64::from(cast_result) != f {
+	Err("Cannot cast to integer".to_string())
+    } else {
+	Ok(cast_result)
+    }
+}
+
+fn unwrap_num_or_stringed_num(l: &LV) -> Result<f64, String> {
+    // takes a number or a string and tries to unwrap it
+    match l {
+	Num(n) => Ok(*n),
+	LuaS(s) => {
+	    match s.parse::<f64>() {
+		Ok(result) => Ok(result),
+		Err(_) => Err("not a number".to_string())
+	    }
+	},
+	_ => Err("not a number".to_string())
+    }
+}
+
+pub fn lua_binop_lshift<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+    match (
+	unwrap_num_or_stringed_num(l),
+	unwrap_num_or_stringed_num(r),
+    ) {
+	(Ok(n), Ok(m)) => {
+	    // we need to confirm if we have integer representations
+	    let int_n = try_convert_i32(n);
+	    let int_m = try_convert_i32(m);
+	    match (int_n, int_m) {
+		(Ok(x), Ok(y)) => Ok(Num((x << y).into())),
+		_ => Err(format!("No integer conversions for {} and {}", n, m))
+	    }
+	},
+	_ => Err(format!("Bitshift attempt for {} and {}", l, r))
+    }
+}
+
+pub fn lua_binop_rshift<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+    match (
+	unwrap_num_or_stringed_num(l),
+	unwrap_num_or_stringed_num(r),
+    ) {
+	(Ok(n), Ok(m)) => {
+	    // we need to confirm if we have integer representations
+	    let int_n = try_convert_i32(n);
+	    let int_m = try_convert_i32(m);
+	    match (int_n, int_m) {
+		(Ok(x), Ok(y)) => Ok(Num((x >> y).into())),
+		_ => Err(format!("No integer conversions for {} and {}", n, m))
+	    }
+	},
+	_ => Err(format!("Bitshift attempt for {} and {}", l, r))
+    }
+}
+
+pub fn lua_binop_binor<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+    match (
+	unwrap_num_or_stringed_num(l),
+	unwrap_num_or_stringed_num(r),
+    ) {
+	(Ok(n), Ok(m)) => {
+	    // we need to confirm if we have integer representations
+	    let int_n = try_convert_i32(n);
+	    let int_m = try_convert_i32(m);
+	    match (int_n, int_m) {
+		(Ok(x), Ok(y)) => Ok(Num((x | y).into())),
+		_ => Err(format!("No integer conversions for {} and {}", n, m))
+	    }
+	},
+	_ => Err(format!("Bitshift attempt for {} and {}", l, r))
+    }
+}
+
+pub fn lua_binop_binand<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+    match (
+	unwrap_num_or_stringed_num(l),
+	unwrap_num_or_stringed_num(r),
+    ) {
+	(Ok(n), Ok(m)) => {
+	    // we need to confirm if we have integer representations
+	    let int_n = try_convert_i32(n);
+	    let int_m = try_convert_i32(m);
+	    match (int_n, int_m) {
+		(Ok(x), Ok(y)) => Ok(Num((x & y).into())),
+		_ => Err(format!("No integer conversions for {} and {}", n, m))
+	    }
+	},
+	_ => Err(format!("Bitshift attempt for {} and {}", l, r))
+    }
+}
+
+pub fn lua_binop_binxor<'a>(l: &LV<'a>, r: &LV<'a>) -> LuaResult<'a> {
+    match (
+	unwrap_num_or_stringed_num(l),
+	unwrap_num_or_stringed_num(r),
+    ) {
+	(Ok(n), Ok(m)) => {
+	    // we need to confirm if we have integer representations
+	    let int_n = try_convert_i32(n);
+	    let int_m = try_convert_i32(m);
+	    match (int_n, int_m) {
+		(Ok(x), Ok(y)) => Ok(Num((x ^ y).into())),
+		_ => Err(format!("No integer conversions for {} and {}", n, m))
+	    }
+	},
+	_ => Err(format!("Bitshift attempt for {} and {}", l, r))
     }
 }
 

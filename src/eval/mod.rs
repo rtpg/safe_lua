@@ -25,7 +25,7 @@ const DBG_POP_PUSH: bool = false;
 // the type for native Lua functions
 pub type LuaErr = String;
 pub type LuaResult<'a> = Result<LV<'a>, LuaErr>;
-pub type LuaNative<'a> = fn(&LuaRunState<'a>, Option<LV<'a>>) -> LV<'a>;
+pub type LuaNative<'a> = fn(&LuaRunState<'a>, Option<LV<'a>>) -> LuaResult<'a>;
 
 // our Lua values
 #[derive(Clone)]

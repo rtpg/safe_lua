@@ -1,3 +1,4 @@
+use eval::LuaResult;
 use eval::LuaNative;
 use natives::lua_truthy;
 use eval::DBG_POP_PUSH;
@@ -36,6 +37,17 @@ macro_rules! vm_panic {
 	panic!("VM CRASH");
     }
 }
+
+fn unwrap_or_vm_panic<'a, 'b>(s: &'b LuaRunState<'a>, val: LuaResult<'a>) -> LV<'a> {
+    // open up a result, but panic if it failed
+    match val {
+	Err(err) => {
+	    vm_panic!(s, err);
+	},
+	Ok(result) => result
+    }
+}
+
 fn print_and_push<'a>(stack: &mut LuaValueStack<'a>, val: LV<'a>) {
     if DBG_POP_PUSH {
 	println!("PUSH => {}", val);
@@ -221,9 +233,15 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 		    "-" => lua_binop_minus(&l, &r),
 		    "+" => lua_binop_plus(&l, &r),
 		    "*" => lua_binop_times(&l, &r),
-		    "/" => lua_binop_div(&l, &r),
+		    "/" => unwrap_or_vm_panic(s, lua_binop_div(&l, &r)),
+		    "//" => unwrap_or_vm_panic(s, lua_binop_floordiv(&l, &r)),
 		    "<" => lua_binop_less(&l, &r),
-		    ">" => lua_binop_greater(&l, &r),
+		    ">" => unwrap_or_vm_panic(s, lua_binop_greater(&l, &r)),
+		    "<<" => unwrap_or_vm_panic(s, lua_binop_lshift(&l, &r)),
+		    ">>" => unwrap_or_vm_panic(s, lua_binop_rshift(&l, &r)),
+		    "|" => unwrap_or_vm_panic(s, lua_binop_binor(&l, &r)),
+		    "&" => unwrap_or_vm_panic(s, lua_binop_binand(&l, &r)),
+		    "~" => unwrap_or_vm_panic(s, lua_binop_binxor(&l, &r)),
 		    "and" => lua_binop_and(&l, &r),
 		    "or" => lua_binop_or(&l, &r),
 		    "%" => lua_binop_mod(&l, &r),
@@ -406,5 +424,10 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 fn handle_native_call<'a, 'b>(s: &'b mut LuaRunState<'a>, f: LuaNative<'a>, args: LV<'a>) {
     // call a native function, and do all the proper error handling from it 
     let return_value = f(s, Some(args));
-    push(s, return_value);
+    match return_value {
+	Ok(result) => push(s, result),
+	Err(err) => {
+	    vm_panic!(s, err);
+	}
+    }
 }

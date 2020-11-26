@@ -1,13 +1,12 @@
 pub mod binops;
 
 
-use eval::LuaErr;
 use super::eval::{
     LV,
-    LuaRunState
+    LuaRunState,
+    LuaResult
 };
 
-type LuaResult<'a> = Result<LV<'a>, LuaErr>;
 
 fn unwrap_single_arg<'a>(args: Option<LV<'a>>) -> Option<LV<'a>> {
     // helper to unwrap a single arg from args
@@ -35,19 +34,6 @@ fn unwrap_single_arg<'a>(args: Option<LV<'a>>) -> Option<LV<'a>> {
 	}
     }
 }
-macro_rules! vm_panic {
-    ($s: expr, $err: expr) => {
-	println!("!! Lua VM crash");
-	// TODO unwind the entire frame stack here for more information
-	let f = &$s.current_frame;
-	let (line_no, lines) = f.code.sourcemap.get_lines_for_bytecode(f.pc);
-	println!("!! failed on line {} of {}", line_no, $s.file_path);
-	println!("--> {}", lines);
-	println!("With:");
-	dbg!($err);
-	panic!("VM CRASH");
-    }
-}
 
 pub fn lua_truthy(elt: &LV) -> bool {
     match elt {
@@ -57,18 +43,17 @@ pub fn lua_truthy(elt: &LV) -> bool {
     }
 }
 
-pub fn lua_assert<'a, 'b>(_s: &LuaRunState, args: Option<LV<'a>>) -> LV<'a> {
+pub fn lua_assert<'a, 'b>(_s: &LuaRunState, args: Option<LV<'a>>) -> LuaResult<'a> {
     match unwrap_single_arg(args){
 	Some(arg) => {
 	    if lua_truthy(&arg) {
-		arg.clone()
+		Ok(arg.clone())
 	    } else {
-		dbg!(arg);
-		vm_panic!(_s, "Assertion failure in Lua Execution");
+		return Err("Assertion failure in Lua Execution".to_string());
 	    }
 	},
 	None => {
-	    panic!("Arity failure calling assert");
+	    return Err("Arity failulre calling assert".to_string());
 	}
     }
 }
@@ -83,14 +68,14 @@ pub fn lua_fmt_for_print(arg: &LV) -> String {
 	}
     }
 }
-pub fn lua_print<'a>(_s: &LuaRunState, args: Option<LV>) -> LV<'a> {
+pub fn lua_print<'a>(_s: &LuaRunState, args: Option<LV>) -> LuaResult<'a> {
     match unwrap_single_arg(args){
 	Some(arg) => {
 	    println!("{}", lua_fmt_for_print(&arg));
-	    return LV::LuaNil;
+	    return Ok(LV::LuaNil);
 	},
 	None => {
-	    panic!("Wrong arity for lua_print");
+	    return Err("Wrong arity for lua_print".to_string());
 	}
     }
 }
@@ -111,25 +96,25 @@ fn lua_type_internal<'a>(arg: LV) -> String {
 	}
     }
 }
-pub fn lua_type<'a>(_s: &LuaRunState, args: Option<LV>) -> LV<'a> {
+pub fn lua_type<'a>(_s: &LuaRunState, args: Option<LV>) -> LuaResult<'a> {
     match unwrap_single_arg(args){
 	Some(arg) => {
 	    let type_name = lua_type_internal(arg);
-	    return LV::LuaS(type_name);
+	    return Ok(LV::LuaS(type_name));
 	},
 	None => {
-	    panic!("Wrong arity");
+	    return Err("Wrong arity".to_string());
 	}
     }
 }
-pub fn lua_require<'a>(s: &LuaRunState<'a>, args: Option<LV>) -> LV<'a> {
+pub fn lua_require<'a>(s: &LuaRunState<'a>, args: Option<LV<'a>>) -> LuaResult<'a> {
     match unwrap_single_arg(args) {
 	Some(arg) => {
 	    match arg {
 		LV::LuaS(package_name) => {
 		    match s.packages.get(&package_name) {
 			// TODO noclone
-			Some(package) => return package.clone(),
+			Some(package) => return Ok(package.clone()),
 			None => {
 			    dbg!(package_name);
 			    panic!("Failed package import");
