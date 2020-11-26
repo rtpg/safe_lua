@@ -225,6 +225,8 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState<'a>, _yield_result: Opt
 		    ">" => lua_binop_greater(&l, &r),
 		    "and" => lua_binop_and(&l, &r),
 		    "or" => lua_binop_or(&l, &r),
+		    "%" => lua_binop_mod(&l, &r),
+		    ".." => lua_binop_concat(&l, &r),
 		    _ => {
 			dbg!(binop);
 			vm_panic!(s, "unknown binop");

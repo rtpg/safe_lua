@@ -631,6 +631,24 @@ pub fn try_parse<'a>(input: &'a str) -> Result<ast::Block<'a>, String> {
     return Ok(b);
 }
 
+pub fn try_specific_parse<'a, 'b, ParseType>(
+    parser: impl for<'c> Fn(&'c IStream<'a>)
+				-> IResult<&'c IStream<'a>, ParseType>,
+    input: &'a str
+) -> Result<ParseType, String> {
+    // try parsing with a specific parser
+    let input = LexInput::new(&input);
+    let (input, tokens) = lex_all(input).unwrap();
+    if input.to_string().len() > 0 {
+	return Err("failed to lex all input".to_string());
+    }
+    let (remaining_tokens, result) = parser(&tokens).unwrap();
+    if remaining_tokens.len() > 0 {
+	return Err("Failed to parse all input".to_string());
+    }
+    return Ok(result);
+}
+
 pub fn parse<'a>(input: &'a str) -> ast::Block<'a> {
     let input = LexInput::new(input);
     let (input, tokens) = lex_all(input).unwrap();

@@ -1,6 +1,7 @@
 extern crate safe_lua;
 extern crate nom_locate;
 use safe_lua::compile::Sourcemap;
+use safe_lua::compile::SourcemapLoc;
 use nom_locate::LocatedSpan;
 
 #[test]
@@ -11,5 +12,5 @@ fn test_sourcemaps(){
 
     sm.write_map(0, loc_0);
 
-    assert_eq!(sm.get_location(0), loc_0);
+    assert_eq!(sm.get_location(0), SourcemapLoc::new(1));
 }

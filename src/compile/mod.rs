@@ -119,7 +119,7 @@ pub enum BC {
     PANIC(String),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub struct SourcemapLoc {
     line: usize,
 }

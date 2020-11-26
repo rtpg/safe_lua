@@ -59,6 +59,20 @@ pub struct Lex<'a> {
     pub val: LexValue
 }
 
+impl<'a> Lex<'a> {
+    pub fn kwd(s: String, loc: Option<LocatedSpan<&'a str>>) -> Lex<'a> {
+	let location = if loc.is_some() {
+	    loc.unwrap()
+	} else {
+	    LocatedSpan::new("")
+	};
+	
+	return Lex {
+	    location: location,
+	    val: LexValue::Keyword(s)
+	}
+    }
+}
 fn _find_name_bound(input: &str) -> Option<usize> {
     // find until where a name is present
     for (i, &item) in input.as_bytes().iter().enumerate(){

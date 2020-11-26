@@ -1,10 +1,13 @@
 pub mod binops;
 
 
+use eval::LuaErr;
 use super::eval::{
     LV,
     LuaRunState
 };
+
+type LuaResult<'a> = Result<LV<'a>, LuaErr>;
 
 fn unwrap_single_arg<'a>(args: Option<LV<'a>>) -> Option<LV<'a>> {
     // helper to unwrap a single arg from args
@@ -70,9 +73,9 @@ pub fn lua_assert<'a, 'b>(_s: &LuaRunState, args: Option<LV<'a>>) -> LV<'a> {
     }
 }
 
-pub fn lua_fmt_for_print(arg: LV) -> String {
+pub fn lua_fmt_for_print(arg: &LV) -> String {
     match arg {
-	LV::LuaS(s) => s,
+	LV::LuaS(s) => s.to_string(),
 	LV::Num(n) => n.to_string(),
 	_ => {
 	    println!("CALLED LUA PRINT ON UNSUPPORTED {}", arg);
@@ -83,7 +86,7 @@ pub fn lua_fmt_for_print(arg: LV) -> String {
 pub fn lua_print<'a>(_s: &LuaRunState, args: Option<LV>) -> LV<'a> {
     match unwrap_single_arg(args){
 	Some(arg) => {
-	    println!("{}", lua_fmt_for_print(arg));
+	    println!("{}", lua_fmt_for_print(&arg));
 	    return LV::LuaNil;
 	},
 	None => {

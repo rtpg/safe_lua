@@ -41,6 +41,7 @@ pub fn exponent<'a, 'b>(i: &'b IStream<'a>) -> EResult<'a, 'b> {
     let (i, binops) = many0(
 	pair(
          kwd("^"),
+	 // this one feels pretty wrong...
 	 maybe_unaryop 
 	))(i)?;
     return Ok(
@@ -94,7 +95,7 @@ fn multop<'a, 'b>(i: &'b IStream<'a>) -> EResult<'a, 'b> {
 	 alt((
 	    kwd("%"), kwd("//"), kwd("/"), kwd("*"),
 	 )),
-	 multop
+	 maybe_unaryop 
 	))(i)?;
     return Ok(
 	(i,
@@ -110,7 +111,7 @@ fn plusop<'a, 'b>(i: &'b IStream<'a>) -> EResult<'a, 'b> {
 	 alt((
 	    kwd("-"), kwd("+"),
 	 )),
-	 plusop
+	 multop 
 	))(i)?;
     return Ok(
 	(i,
@@ -250,5 +251,88 @@ fn fold_binops<'a>(first_expr: ast::Expr<'a>, binops: Vec<(Lex<'a>, ast::Expr<'a
 	    )
 	}
 	return result_expression;
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use parse::try_specific_parse;
+    use parse::expr;
+    use pretty_assertions::{assert_eq};
+use super::*;
+    use ast::Expr;
+    use nom_locate::LocatedSpan;
+
+    #[test]
+    fn test_parse_binop(){
+	let result_expr = try_specific_parse(
+	    expr,
+	    "a+b+c"
+	).unwrap();
+
+	let expected = Expr::binop(
+	    Expr::binop(
+		Expr::name("a"),
+		"+",
+		Expr::name("b"),
+	    ),
+	    "+",
+	    Expr::name("c")
+	);
+
+	assert_eq!(expected, result_expr);
+
+	// now try with minuses
+	let minus_expr = try_specific_parse(
+	    expr,
+	    "-a-b-c",
+	).unwrap();
+
+	let minus_expected = Expr::binop(
+	    Expr::binop(
+		Expr::unary(
+		    "-",
+		    Expr::name("a"),
+		),
+		"-",
+		Expr::name("b")
+	    ),
+	    "-",
+	    Expr::name("c"),
+	);
+
+	assert_eq!(minus_expected, minus_expr);
+    }
+    
+    #[test]
+    fn test_fold_binops(){
+	// I want to test here that when folding we're being left
+	// associative rather than right associative
+
+	// expression is a + b + c
+	// we want (a + b) + c
+	// not a + (b + c)
+	let a =  Expr::new_name("a", LocatedSpan::new(""));
+	let b =  Expr::new_name("b", LocatedSpan::new(""));
+	let c =  Expr::new_name("c", LocatedSpan::new(""));
+	let result = fold_binops(
+	    a.clone(),
+	    vec![
+		(Lex::kwd("+".to_string(), None), b.clone()),
+		(Lex::kwd("+".to_string(), None), c.clone()),
+	    ]
+	);
+
+	let expected = Expr::binop(
+	    Expr::binop(
+		a,
+		"+",
+		b
+	    ),
+	    "+",
+	    c
+	);
+
+	assert_eq!(result, expected);
     }
 }

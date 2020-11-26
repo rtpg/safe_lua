@@ -56,6 +56,8 @@ pub enum LV<'a> {
     LuaFalse,
 }
 
+pub type LuaErr = String;
+
 #[derive(Debug)]
 pub struct LuaExc {
     // a Lua Exception

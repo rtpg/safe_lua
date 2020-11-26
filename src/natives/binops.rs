@@ -1,3 +1,4 @@
+use natives::lua_fmt_for_print;
 use natives::lua_truthy;
 use eval::LuaExc;
 use eval::LV;
@@ -175,6 +176,30 @@ pub fn lua_binop_div<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
     }
 }
 
+pub fn lua_binop_mod<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
+    match l {
+	Num(n) => {
+	    match r {
+		Num(m) => {
+		    // from "Programming in Lua"
+		    // The following equation defines the modulo operator:
+                    // a % b == a - ((a // b) * b)
+		    // (floor division is //)
+
+		    let floor_div = (n/m).floor();
+		    LV::Num(n - ((floor_div) * m))
+		},
+		_ => panic!("FAILURE (need to implement lua-bubbling failure)")
+	    } 
+	},
+	_ => {
+	    dbg!(l);
+	    dbg!(r);
+	    panic!("need binop impl");
+	}
+    }
+}
+
 pub fn lua_binop_and<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
     // lua considers false and nil to be falsy
     // everything else is truthy
@@ -238,4 +263,26 @@ pub fn lua_binop_greater<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
 	    panic!("need binop impl");
 	}
     }
+}
+
+pub fn lua_binop_concat<'a>(l: &LV<'a>, r: &LV<'a>) -> LV<'a> {
+    // We can concatenate two strings with the concatenation operator .. (two dots).
+    // If any operand is a number, Lua converts this number to a string:
+    let left_value = match &l {
+	LuaS(s) => s.to_string(),
+	Num(n) => lua_fmt_for_print(&l),
+	_ => {
+	    dbg!(l);
+	    panic!("invalid operand for concat");
+	}
+    };
+    let right_value = match &r {
+	LuaS(s) => s.to_string(),
+	Num(n) => lua_fmt_for_print(&r),
+	_ => {
+	    dbg!(r);
+	    panic!("invalid operand for concat");
+	}
+    };
+    return LuaS(left_value + &right_value);
 }
