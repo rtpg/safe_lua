@@ -6,6 +6,7 @@ pub mod utils;
 mod func;
 mod expr;
 mod binop;
+pub mod numbers;
 
 use nom::sequence::terminated;
 use nom_locate::LocatedSpan;

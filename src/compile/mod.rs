@@ -14,6 +14,7 @@ use ast;
 use lex;
 use std::collections::HashMap;
 use ast::Name;
+use parse::numbers::parse_lua_hex;
 
 // jump target shape
 #[derive(Clone, Debug)]
@@ -558,30 +559,25 @@ pub fn push_var_assignment<'a>(var: ast::Var<'a>, code: &mut impl Code<'a>){
 pub fn push_numeral<'a>(n: &String, code: &mut impl Code<'a>){
 
     // we will parse out the value
-    if n.starts_with("0x") {
-	// hex
-	let hex_wo_pfx = n.trim_start_matches("0x");
-	match i64::from_str_radix(hex_wo_pfx, 16) {
-	    Ok(v) => {
-		// TODO get rid of rounding
-		code.emit(BC::PUSH_NUMBER(v as f64), None)
-	    },
-	    Err(_) => {
-		dbg!(n);
-		panic!("PARSE FAILURE ON HEX NUMERAL");
-	    }
-	}
+    if n.starts_with("0x") || n.starts_with("0X") {
+        match parse_lua_hex(n) {
+            Ok(v) => code.emit(BC::PUSH_NUMBER(v), None),
+            Err(_) => {
+                dbg!(n);
+                panic!("PARSE FAILURE ON HEX NUMERAL");
+            }
+        }
     } else {
-	// not hex
-	match n.parse::<f64>() {
-	    Ok(v) => {
-		code.emit(BC::PUSH_NUMBER(v), None)
-	    },
-	    Err(_) => {
-		dbg!(n);
-		panic!("PARSE FAILURE ON NUMERAL");
-	    }
-	}
+        // not hex
+        match n.parse::<f64>() {
+            Ok(v) => {
+            code.emit(BC::PUSH_NUMBER(v), None)
+            },
+            Err(_) => {
+            dbg!(n);
+            panic!("PARSE FAILURE ON NUMERAL");
+            }
+        }
     }
 }
 pub fn push_expr<'a>(expr: ast::Expr<'a>, code: &mut impl Code<'a>){

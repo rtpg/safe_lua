@@ -263,6 +263,7 @@ use super::*;
     use ast::Expr;
     use nom_locate::LocatedSpan;
 
+    #[ignore]
     #[test]
     fn test_parse_binop(){
 	let result_expr = try_specific_parse(
