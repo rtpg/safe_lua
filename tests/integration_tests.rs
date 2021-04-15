@@ -32,6 +32,7 @@ lua_tests! {
     test_all: "lua_tests/all.lua",
     test_api: "lua_tests/api.lua",
     test_attrib: "lua_tests/attrib.lua",
+    test_base: "lua_tests/base.lua",
     test_big: "lua_tests/big.lua",
     test_bitwise: "lua_tests/bitwise.lua",
     test_calls: "lua_tests/calls.lua",

@@ -6,6 +6,7 @@ use eval::LuaValueStack;
 use eval::DBG_POP_PUSH;
 use eval::DBG_PRINT_INSTRUCTIONS;
 use eval::LV;
+use eval::attr::getattr;
 use natives::binops::*;
 use natives::lua_truthy;
 use std::collections::HashMap;
@@ -360,6 +361,29 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState, _yield_result: Option<
                     }
                 }
             }
+            BC::DOT_ACCESS => {
+                let property_obj = pop!();
+                let object = pop!();
+                let property;
+                match property_obj {
+                    LV::LuaS(s) => {
+                        property = s;
+                    },
+                    _ => {
+                        dbg!(property_obj);
+                        vm_panic!(s, "Tried to use a non-string on a dot access");
+                    }
+                };
+                match getattr(&object, &property) {
+                    Ok(v) => push(s, v),
+                    Err(e) => {
+                        dbg!(object);
+                        dbg!(property);
+                        vm_panic!(s, "Tried to lookup a property but failed");
+                    }
+                }
+
+            },
             _ => {
                 dbg!(next_instruction);
                 vm_panic!(s, "Unhandled Bytecode");

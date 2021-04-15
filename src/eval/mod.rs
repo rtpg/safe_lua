@@ -1,6 +1,7 @@
 #[macro_use]
 #[allow(dead_code)]
 pub mod exec;
+pub mod attr;
 use super::ast;
 use super::compile::{compile, CodeObj};
 use super::lua_stdlib::stdlib;
