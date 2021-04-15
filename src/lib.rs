@@ -6,21 +6,21 @@ extern crate pretty_assertions;
 #[macro_use]
 extern crate lazy_static;
 
-pub mod macros;
+#[allow(dead_code)]
+pub mod ast;
+pub mod compile;
 #[allow(dead_code)]
 pub mod eval;
 #[allow(dead_code)]
-pub mod ast;
+pub mod lex;
+pub mod lua_stdlib;
+pub mod macros;
+pub mod natives;
+pub mod numbers;
 #[allow(dead_code)]
 pub mod parse;
-#[allow(dead_code)]
-pub mod lex;
-pub mod compile;
 pub mod utils;
-pub mod numbers;
-pub mod natives;
-pub mod lua_stdlib;
-pub fn main(){
+pub fn main() {
     println!("Starting lex");
     println!("Starting parse");
 }

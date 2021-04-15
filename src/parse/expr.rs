@@ -1,6 +1,6 @@
 use super::*;
 
-pub fn expr<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, ast::Expr<'a>>{
+pub fn expr<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, ast::Expr<'a>> {
     // parse out any unary operators and then read inner expressions;
     return expr2(i);
     // let (i, mut unops) = many0(unary_op)(i)?;
@@ -19,7 +19,7 @@ pub fn expr<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, ast::Expr<'a
 }
 
 fn expr2<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, ast::Expr<'a>> {
-    // basically, parse binary opereators since they're 
+    // basically, parse binary opereators since they're
     // left recursive
     use parse::binop::parse_binops;
     return parse_binops(i);
@@ -42,7 +42,6 @@ fn expr2<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, ast::Expr<'a>> 
     // }
 }
 
-
 pub fn expr_consume<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, ast::Expr<'a>> {
     return alt((
         expr_constants,
@@ -57,7 +56,9 @@ fn expr_constants<'a, 'b>(i: &'b IStream<'a>) -> IResult<&'b IStream<'a>, ast::E
         map(kwd("true"), |k| ast::Expr::True(k.location)),
         map(kwd("false"), |k| ast::Expr::False(k.location)),
         num_parser,
-        map(literal_string_parser, |(s, loc)| ast::Expr::LiteralString(s, loc)),
+        map(literal_string_parser, |(s, loc)| {
+            ast::Expr::LiteralString(s, loc)
+        }),
         map(kwd("..."), |k| ast::Expr::Ellipsis(k.location)),
         map(table_constructor, |(t, loc)| ast::Expr::Tbl(t, loc)),
         function_def,

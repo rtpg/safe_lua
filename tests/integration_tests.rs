@@ -1,19 +1,12 @@
 extern crate safe_lua;
+use safe_lua::eval::{exec, initial_run_state, LuaRunState};
 use safe_lua::file_contents;
-use safe_lua::{
-    eval::{
-	LuaRunState,
-	initial_run_state,
-        exec
-    }
-};
 use std::fs::File;
 use std::io::Read;
 
 pub fn load_file<'a>(file_path: &'a str, contents: &'a str) -> LuaRunState {
     return initial_run_state(contents, file_path);
 }
-
 
 macro_rules! lua_tests {
     ($($name: ident: $file: expr,)*) => {
@@ -32,7 +25,7 @@ macro_rules! lua_tests {
 		}
 	    }
 	)*
-    } 
+    }
 }
 
 lua_tests! {

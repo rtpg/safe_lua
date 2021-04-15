@@ -1,12 +1,11 @@
-extern crate safe_lua;
 extern crate nom_locate;
+extern crate safe_lua;
+use nom_locate::LocatedSpan;
 use safe_lua::compile::Sourcemap;
 use safe_lua::compile::SourcemapLoc;
-use nom_locate::LocatedSpan;
 
 #[test]
-fn test_sourcemaps(){
-
+fn test_sourcemaps() {
     let loc_0 = LocatedSpan::new("Location Zero");
     let mut sm = Sourcemap::new("loc");
 
