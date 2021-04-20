@@ -118,7 +118,13 @@ fn draw_debugger_state<W: std::io::Write>(stdout: &mut RawTerminal<W>) {
     stdout.flush().unwrap();
 }
 
-pub fn debugger_loop() {
+pub enum DebugCmd {
+    Quit,
+    Step,
+    Continue,
+}
+
+pub fn debugger_loop() -> DebugCmd {
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode().unwrap();
 
@@ -137,7 +143,9 @@ pub fn debugger_loop() {
         // Print the key we type...
         match c.unwrap() {
             // Exit.
-            Key::Char('q') => break,
+            Key::Char('q') => return DebugCmd::Quit,
+            Key::Char('s') => return DebugCmd::Step,
+            Key::Char('c') => return DebugCmd::Continue,
             Key::Char(c) => println!("{}", c),
             Key::Alt(c) => println!("Alt-{}", c),
             Key::Ctrl(c) => println!("Ctrl-{}", c),
@@ -153,4 +161,5 @@ pub fn debugger_loop() {
 
     // Show the cursor again before we exit.
     write!(stdout, "{}", termion::cursor::Show).unwrap();
+    return DebugCmd::Step;
 }

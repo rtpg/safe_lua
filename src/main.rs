@@ -37,12 +37,14 @@ struct MainOpts {
     bytecode: bool,
     #[argh(switch, description = "run the REPL")]
     repl: bool,
+    #[argh(switch, description = "hook up the stepping debugger")]
+    debug: bool,
 }
 
 #[allow(unused_variables)]
 fn main() {
     // debugger
-    debugger::debugger_loop();
+    // debugger::debugger_loop();
     let opts: MainOpts = argh::from_env();
 
     if opts.repl {
@@ -88,19 +90,35 @@ fn main() {
         compile::display::display_code_block(&compile_result);
     } else {
         let mut run_state = eval::initial_run_state(&contents, &filepath);
+        let mut debugging = opts.debug;
         // for now we're just going to loop over our yielding mechanisms
         loop {
-            use eval::exec::ExecResult::*;
-            match eval::exec::exec_to_next_yield(&mut run_state, None) {
-                Done(s) => {
-                    println!("Exit code was: {}", s);
-                    break;
+            if debugging {
+                match debugger::debugger_loop() {
+                    debugger::DebugCmd::Quit => {
+                        println!("Quit from the debugger");
+                        break;
+                    }
+                    debugger::DebugCmd::Step => {
+                        // let's step through one operation
+                    }
+                    debugger::DebugCmd::Continue => {
+                        debugging = false;
+                    }
                 }
-                Error(s) => {
-                    println!("Error on execution: {}", s);
-                }
-                Yield(s) => {
-                    panic!("TODO: implement yield handling. Yielded {}", s);
+            } else {
+                use eval::exec::ExecResult::*;
+                match eval::exec::exec_to_next_yield(&mut run_state, None) {
+                    Done(s) => {
+                        println!("Exit code was: {}", s);
+                        break;
+                    }
+                    Error(s) => {
+                        println!("Error on execution: {}", s);
+                    }
+                    Yield(s) => {
+                        panic!("TODO: implement yield handling. Yielded {}", s);
+                    }
                 }
             }
         }
