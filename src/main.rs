@@ -2,6 +2,7 @@ extern crate argh;
 extern crate nom;
 extern crate nom_locate;
 extern crate pretty_assertions;
+extern crate termion;
 
 #[macro_use]
 extern crate lazy_static;
@@ -12,10 +13,12 @@ use repl::do_repl;
 mod macros;
 mod ast;
 mod compile;
+mod debugger;
 mod eval;
 mod lex;
 mod lua_stdlib;
 mod natives;
+
 pub mod numbers;
 mod parse;
 use std::fs::File;
@@ -38,6 +41,8 @@ struct MainOpts {
 
 #[allow(unused_variables)]
 fn main() {
+    // debugger
+    debugger::debugger_loop();
     let opts: MainOpts = argh::from_env();
 
     if opts.repl {
