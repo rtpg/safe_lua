@@ -1,5 +1,6 @@
 use compile::{JumpTarget, BC};
 use eval::attr::getattr;
+use eval::lua_hash;
 use eval::LuaNative;
 use eval::LuaResult;
 use eval::LuaRunState;
@@ -180,6 +181,25 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
             s.current_frame.env.set(n.to_string(), val);
         }
         BC::PUSH_NEW_TBL => push(s, LV::LuaTable { v: HashMap::new() }),
+        BC::ASSIGN_TABLE_VALUE => {
+            let value = pop!();
+            let key = pop!();
+            let tbl_wrapped = pop!();
+            let mut tbl = match tbl_wrapped {
+                LV::LuaTable { v } => v,
+                _ => {
+                    dbg!(tbl_wrapped);
+                    vm_panic!(s, "Tried to assign table value to non-table");
+                }
+            };
+            // hash the key to insert into the table
+            let hash = lua_hash(&key);
+            tbl.insert(hash, value);
+            // TODO probably better way of doing this than rebuilding this object
+            // all the time
+            push(s, LV::LuaTable { v: tbl });
+            vm_panic!(s, "TODO: implement assign table value");
+        }
         BC::POP => {
             pop!();
         }
@@ -332,6 +352,9 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
         }
         BC::JUMP(new_location) => {
             intended_next_pc = Some(new_location.clone());
+        }
+        BC::RETURN_NONE => {
+            s.return_from_funccall(LV::LuaNil);
         }
         BC::RETURN_VALUE => {
             let return_value = pop!();

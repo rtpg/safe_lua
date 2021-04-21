@@ -10,21 +10,24 @@ pub fn load_file<'a>(file_path: &'a str, contents: &'a str) -> LuaRunState {
 
 macro_rules! lua_tests {
     ($($name: ident: $file: expr,)*) => {
-	$(
-	    #[test]
-	    fn $name(){
-		let file_name = $file;
-		file_contents!(file_name, contents);
-		let mut run_state = load_file(&file_name, &contents);
-
-		loop {
-		    exec::exec_to_next_yield(
-			&mut run_state,
-			None
-		    );
-		}
-	    }
-	)*
+    $(
+        #[test]
+        fn $name(){
+        let file_name = $file;
+        file_contents!(file_name, contents);
+        let mut run_state = load_file(&file_name, &contents);
+         loop {
+             let result = exec::exec_to_next_yield(
+                &mut run_state,
+                None
+             );
+             match result {
+                 exec::ExecResult::Done(_) => break,
+                 _ => {}
+             }
+         }
+        }
+    )*
     }
 }
 

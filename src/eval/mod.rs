@@ -21,6 +21,15 @@ const DBG_POP_PUSH: bool = false;
 pub type LuaErr = String;
 pub type LuaResult = Result<LV, LuaErr>;
 pub type LuaNative = fn(&LuaRunState, Option<LV>) -> LuaResult;
+// TODO move to datastructs
+#[derive(Hash, PartialEq, Eq, Debug, Clone)]
+pub enum LuaHash {}
+
+pub fn lua_hash(v: &LV) -> LuaHash {
+    match v {
+        _ => todo!(),
+    }
+}
 
 // our Lua values
 #[derive(Clone)]
@@ -29,7 +38,7 @@ pub enum LV {
     LuaS(String),
     LuaList(Vec<LV>),
     LuaTable {
-        v: HashMap<String, LV>,
+        v: HashMap<LuaHash, LV>,
     },
     NativeFunc {
         name: String,
