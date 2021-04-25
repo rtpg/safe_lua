@@ -1,5 +1,6 @@
 use eval::lua_hash;
 use eval::LuaErr;
+use eval::LuaNative;
 use eval::LV;
 
 // pub fn lua_getattr(tlb: &LV, key: &LV) -> Result<LV, LuaErr> {}
@@ -18,4 +19,13 @@ pub fn lua_setattr(tbl: &mut LV, key: &LV, value: LV) -> Result<(), LuaErr> {
     table_data.insert(lua_hash(key), value);
 
     return Ok(());
+}
+
+pub fn lua_set_native(tbl: &mut LV, key: &str, func: LuaNative) -> Result<(), LuaErr> {
+    let lua_func = LV::NativeFunc {
+        name: key.to_string(),
+        f: func,
+    };
+
+    return lua_ssetattr(tbl, key, lua_func);
 }
