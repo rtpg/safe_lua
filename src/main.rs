@@ -12,6 +12,7 @@ use repl::do_repl;
 mod macros;
 mod ast;
 mod compile;
+pub mod datastructures;
 mod eval;
 mod lex;
 mod lua_stdlib;

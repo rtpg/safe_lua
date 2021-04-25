@@ -9,6 +9,7 @@ extern crate lazy_static;
 #[allow(dead_code)]
 pub mod ast;
 pub mod compile;
+pub mod datastructures;
 #[allow(dead_code)]
 pub mod eval;
 #[allow(dead_code)]

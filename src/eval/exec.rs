@@ -10,7 +10,6 @@ use eval::DBG_PRINT_INSTRUCTIONS;
 use eval::LV;
 use natives::binops::*;
 use natives::lua_truthy;
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum ExecResult {
@@ -180,13 +179,16 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
             let val = pop!();
             s.current_frame.env.set(n.to_string(), val);
         }
-        BC::PUSH_NEW_TBL => push(s, LV::LuaTable { v: HashMap::new() }),
+        BC::PUSH_NEW_TBL => {
+            let new_tbl = s.allocate_tbl();
+            push(s, new_tbl);
+        }
         BC::ASSIGN_TABLE_VALUE => {
             let value = pop!();
             let key = pop!();
             let tbl_wrapped = pop!();
-            let mut tbl = match tbl_wrapped {
-                LV::LuaTable { v } => v,
+            let (tbl, id) = match tbl_wrapped {
+                LV::LuaTable { v, id } => (v, id),
                 _ => {
                     dbg!(tbl_wrapped);
                     vm_panic!(s, "Tried to assign table value to non-table");
@@ -194,10 +196,11 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
             };
             // hash the key to insert into the table
             let hash = lua_hash(&key);
-            tbl.insert(hash, value);
+            tbl.borrow_mut().insert(hash, value);
             // TODO probably better way of doing this than rebuilding this object
             // all the time
-            push(s, LV::LuaTable { v: tbl });
+            // this is inheriting the same id s it's the "same" table
+            push(s, LV::LuaTable { v: tbl, id: id });
             vm_panic!(s, "TODO: implement assign table value");
         }
         BC::POP => {

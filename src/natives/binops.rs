@@ -20,6 +20,9 @@ pub fn lua_binop_neq<'a>(l: &LV, r: &LV) -> LV {
     }
 }
 pub fn lua_binop_eq_impl(l: &LV, r: &LV) -> bool {
+    println!("RUNNING EQ ON");
+    dbg!(&l);
+    dbg!(&r);
     match l {
         LuaNil => {
             matches!(r, LuaNil)
@@ -35,7 +38,14 @@ pub fn lua_binop_eq_impl(l: &LV, r: &LV) -> bool {
         LuaTrue => matches!(r, LuaTrue),
         LuaFalse => matches!(r, LuaFalse),
         LuaList(_) => todo!(),
-        LuaTable { .. } => todo!(),
+        LuaTable { id, .. } => match r {
+            LuaTable { id: id2, .. } => {
+                dbg!(l);
+                dbg!(r);
+                id == id2
+            }
+            _ => false,
+        },
         LuaFunc { .. } => todo!(),
         CodeIndex(_) => todo!(),
         Code(_) => todo!(),

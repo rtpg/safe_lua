@@ -23,11 +23,17 @@ pub type LuaResult = Result<LV, LuaErr>;
 pub type LuaNative = fn(&LuaRunState, Option<LV>) -> LuaResult;
 // TODO move to datastructs
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
-pub enum LuaHash {}
+pub enum LuaHash {
+    SHash(String),
+}
 
 pub fn lua_hash(v: &LV) -> LuaHash {
     match v {
-        _ => todo!(),
+        LV::LuaS(s) => return LuaHash::SHash(s.to_string()),
+        _ => {
+            dbg!(v);
+            todo!();
+        }
     }
 }
 
@@ -38,7 +44,9 @@ pub enum LV {
     LuaS(String),
     LuaList(Vec<LV>),
     LuaTable {
-        v: HashMap<LuaHash, LV>,
+        // this id is for identity purposes
+        id: usize,
+        v: Rc<RefCell<HashMap<LuaHash, LV>>>,
     },
     NativeFunc {
         name: String,
@@ -77,7 +85,7 @@ fn lv_fmt(lv: &LV, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Num(n) => f.debug_struct("LuaNum").field("v", n).finish(),
         LuaS(s) => f.debug_struct("LuaString").field("v", s).finish(),
         LuaList(l) => f.debug_struct("LuaList").field("v", l).finish(),
-        LuaTable { v: t } => f.debug_struct("LuaTable").field("v", t).finish(),
+        LuaTable { v: t, .. } => f.debug_struct("LuaTable").field("v", t).finish(),
         LuaFunc { code_idx, args, .. } => f
             .debug_struct("LuaFunc")
             .field("code_idx", code_idx)
@@ -253,6 +261,29 @@ pub struct LuaRunState {
     // stack of frames (doesn't include existing frame)
     frame_stack: Vec<LuaFrame>,
     pub packages: HashMap<String, LV>,
+
+    // allocation stuff
+    pub alloc: LuaAllocator,
+    last_id: usize,
+}
+
+pub struct LuaAllocator {
+    last_id: usize,
+}
+
+impl LuaAllocator {
+    pub fn new() -> LuaAllocator {
+        return LuaAllocator { last_id: 1 };
+    }
+    // provide a garbage-collectable empty table
+    pub fn allocate_tbl(&mut self) -> LV {
+        let table_id = self.last_id;
+        self.last_id += 1;
+        return LV::LuaTable {
+            v: Rc::new(RefCell::new(HashMap::new())),
+            id: table_id,
+        };
+    }
 }
 
 impl<'a> LuaRunState {
@@ -298,6 +329,12 @@ impl<'a> LuaRunState {
         self.current_frame = new_frame;
         self.frame_stack = vec![];
     }
+
+    // provide a garbage-collectable empty table
+    pub fn allocate_tbl(&mut self) -> LV {
+        // TODO probably want to clean this up later on
+        return self.alloc.allocate_tbl();
+    }
 }
 #[allow(dead_code)]
 #[derive(PartialEq, Debug)]
@@ -311,7 +348,7 @@ pub fn run_to_checkpoint(state: LuaRunState) -> RunResult {
     return RunResult::Error(String::from("Yikes"));
 }
 
-pub fn global_env() -> LuaEnv {
+pub fn global_env(stdlib: &HashMap<String, LV>) -> LuaEnv {
     macro_rules! global {
         ($name: expr, $func: expr) => {
             (
@@ -324,12 +361,24 @@ pub fn global_env() -> LuaEnv {
         };
     }
 
+    macro_rules! pkg {
+        ($name: expr) => {
+            ($name.to_string(), stdlib.get($name).unwrap().clone())
+        };
+    }
     let globals: Vec<(String, LV)> = vec![
         global!("print", lua_print),
         global!("require", lua_require),
         global!("assert", lua_assert),
         global!("type", lua_type),
         global!("tonumber", lua_tonumber),
+        pkg!("string"),
+        pkg!("math"),
+        pkg!("table"),
+        pkg!("io"),
+        pkg!("os"),
+        pkg!("coroutine"),
+        // pkg!("package"),
     ];
 
     return LuaEnv::new(globals.iter().cloned().collect(), None);
@@ -347,15 +396,20 @@ pub fn initial_run_state<'a>(contents: &'a str, lua_file_path: &'a str) -> LuaRu
     let parsed_content = parse(contents);
     let compiled_code = compile(parsed_content, contents);
     let boxed_code = Rc::new(compiled_code);
-    let env = global_env();
-    return LuaRunState {
+    let mut alloc = LuaAllocator::new();
+    let packages = stdlib(&mut alloc);
+    let env = global_env(&packages);
+    let state = LuaRunState {
         file_path: String::from(lua_file_path),
         compiled_code: boxed_code.clone(),
         current_frame: frame_from_code(boxed_code.clone(), env.clone()),
         global_env: env,
         frame_stack: vec![],
-        packages: stdlib(),
+        packages: packages,
+        alloc: alloc,
+        last_id: 0,
     };
+    return state;
 }
 
 #[cfg(test)]

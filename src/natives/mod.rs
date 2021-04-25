@@ -1,4 +1,5 @@
 pub mod binops;
+pub mod package;
 
 use super::eval::{LuaResult, LuaRunState, LV};
 
@@ -106,6 +107,8 @@ pub fn lua_require<'a>(s: &LuaRunState, args: Option<LV>) -> LuaResult {
         Some(arg) => {
             match arg {
                 LV::LuaS(package_name) => {
+                    dbg!("TRYING TO LOOKUP");
+                    dbg!(&package_name);
                     match s.packages.get(&package_name) {
                         // TODO noclone
                         Some(package) => return Ok(package.clone()),
