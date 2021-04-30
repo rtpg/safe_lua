@@ -37,10 +37,160 @@ pub fn lua_hash(v: &LV) -> LuaHash {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum LNum {
+    Int(i64),
+    Float(f64),
+}
+
+fn lnum_int(v: &LNum) -> i64 {
+    use eval::LNum::*;
+    match v {
+        Int(i) => *i,
+        Float(f) => *f as i64,
+    }
+}
+
+fn lnum_float(v: &LNum) -> f64 {
+    match v {
+        LNum::Int(v) => *v as f64,
+        LNum::Float(f) => f,
+    }
+}
+
+impl<T> From<T> for LNum
+where
+    T: Into<f64>,
+{
+    fn from(t: T) -> Self {
+        LNum::Float(t.into())
+    }
+}
+impl std::fmt::Display for LNum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LNum::Int(v) => f.debug_struct("Int").field("v", v).finish(),
+            LNum::Float(v) => f.debug_struct("Float").field("v", v).finish(),
+        }
+    }
+}
+
+impl std::ops::Sub<&LNum> for &LNum {
+    type Output = LNum;
+
+    fn sub(self, rhs: &LNum) -> LNum {
+        use self::LNum::*;
+        // all usual operations convert integer to float
+        match self {
+            Int(v) => match rhs {
+                Int(w) => Int(v - w),
+                Float(w) => Float(v as f64 - w),
+            },
+            Float(v) => match rhs {
+                Int(w) => Float(v - w as f64),
+                Float(w) => Float(v - w),
+            },
+        }
+    }
+}
+
+impl std::ops::Div<&LNum> for &LNum {
+    type Output = LNum;
+
+    fn div(self, rhs: &LNum) -> LNum {
+        use self::LNum::*;
+
+        match (self, rhs) {
+            (Int(v), Int(w)) => Int(v / w),
+            (_, _) => Float(lnum_float(self) / lnum_float(rhs)),
+        }
+    }
+}
+
+impl std::ops::Mul<&LNum> for &LNum {
+    type Output = LNum;
+
+    fn mul(self, rhs: &LNum) -> LNum {
+        use self::LNum::*;
+
+        match (self, rhs) {
+            (Int(v), Int(w)) => Int(v * w),
+            (_, _) => Float(lnum_float(self) * lnum_float(rhs)),
+        }
+    }
+}
+impl PartialOrd for LNum {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        use self::LNum::*;
+        match self {
+            Int(v) => match w {
+                Int(w) => return Some(v.comp(w)),
+                Float(w) => return Some(v.comp(w)),
+            },
+            Float(v) => match w {
+                Int(w) => return Some(v.comp(w)),
+                Float(w) => return Some(v.comp(w)),
+            },
+        }
+    }
+}
+impl std::ops::Add<&LNum> for &LNum {
+    type Output = LNum;
+
+    fn add(self, rhs: &LNum) -> LNum {
+        use self::LNum::*;
+        // all usual operations convert integer to float
+        match self {
+            Int(v) => match rhs {
+                Int(w) => Int(v + w),
+                Float(w) => Float(v as f64 + w),
+            },
+            Float(v) => match rhs {
+                Int(w) => Float(v + w as f64),
+                Float(w) => Float(v + w),
+            },
+        }
+    }
+}
+
+impl std::ops::BitAnd for LNum {
+    type Output = LNum;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        match (lnum_int(&self), lnum_int(&rhs)) {
+            (x, y) => LNum::Int(x & y),
+        }
+    }
+}
+
+impl std::ops::BitOr for LNum {
+    type Output = LNum;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        match (lnum_int(&self), lnum_int(&rhs)) {
+            (x, y) => LNum::Int(x | y),
+        }
+    }
+}
+impl PartialEq for LNum {
+    fn eq(&self, other: &LNum) -> bool {
+        match self {
+            LNum::Int(i) => match other {
+                LNum::Int(v) => i == v,
+                LNum::Float(v) => (*i as f64) == *v,
+            },
+            LNum::Float(i) => match other {
+                LNum::Int(v) => *i == (*v as f64),
+                LNum::Float(v) => i == v,
+            },
+        }
+    }
+}
+
 // our Lua values
 #[derive(Clone)]
 pub enum LV {
-    Num(f64),
+    Num(LNum),
     LuaS(String),
     LuaList(Vec<LV>),
     LuaTable {

@@ -39,6 +39,6 @@ pub fn lua_log(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
 pub fn math_pkg(s: &mut LuaAllocator) -> LV {
     let mut pkg = s.allocate_tbl();
     lua_set_native(&mut pkg, "log", lua_log);
-
+    lua_ssetattr(&mut pkg, "maxinteger", LV::Num(i64::MAX as f64));
     return pkg;
 }

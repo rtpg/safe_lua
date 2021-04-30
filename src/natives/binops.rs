@@ -225,7 +225,12 @@ pub fn lua_binop_greater<'a>(l: &LV, r: &LV) -> LuaResult {
     }
 }
 
-fn try_convert_i32(f: f64) -> Result<i32, String> {
+fn try_convert_i32(fv: LNum) -> Result<i32, String> {
+    let f = match fv {
+        LNum::Float(x) => x,
+        LNum::Int(x) => x as f64,
+    };
+
     let cast_result = f as i32;
     if f64::from(cast_result) != f {
         Err("Cannot cast to integer".to_string())
@@ -234,6 +239,7 @@ fn try_convert_i32(f: f64) -> Result<i32, String> {
     }
 }
 
+use eval::LNum;
 use numbers::unwrap_num_or_stringed_num;
 
 pub fn lua_binop_lshift<'a>(l: &LV, r: &LV) -> LuaResult {

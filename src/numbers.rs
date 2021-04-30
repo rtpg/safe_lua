@@ -4,13 +4,15 @@ use eval::LV;
 use eval::LV::*;
 use natives::unwrap_single_arg;
 
-pub fn unwrap_num_or_stringed_num(l: &LV) -> Result<f64, String> {
+use crate::eval::LNum;
+
+pub fn unwrap_num_or_stringed_num(l: &LV) -> Result<LNum, String> {
     // takes a number or a string and tries to unwrap it
     // used by tonumber, among other things
     match l {
         Num(n) => Ok(*n),
         LuaS(s) => match s.parse::<f64>() {
-            Ok(result) => Ok(result),
+            Ok(result) => Ok(LNum::Float(result)),
             Err(_) => Err("not a number".to_string()),
         },
         _ => Err("not a number".to_string()),
