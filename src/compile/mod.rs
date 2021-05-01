@@ -824,7 +824,8 @@ pub fn push_args<'a>(args: &ast::Args<'a>, code: &mut impl Code<'a>) {
                     let expr_count = exprs.len();
                     // since we build up the list a, b, c , we need to
                     // build out the stack like c, b, a
-                    for idx in (expr_count - 1)..0 {
+
+                    for idx in (0..(expr_count)).rev() {
                         let expr = &exprs[idx];
                         push_expr(expr, code);
                     }

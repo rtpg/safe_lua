@@ -20,8 +20,6 @@ pub fn lua_coerce_number(v: &LV) -> Result<f64, LuaErr> {
     }
 }
 pub fn lua_log(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
-    print!("LUA LOG ARGS");
-    dbg!(&args);
     let (x_num, maybe_base_num) = match &args {
         Some(LV::LuaList(v)) => {
             if v.len() == 0 {
