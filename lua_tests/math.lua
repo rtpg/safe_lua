@@ -6,7 +6,12 @@ print("testing numbers and math lib")
 local minint = math.mininteger
 local maxint = math.maxinteger
 
+print("math.log")
+print(math.log(maxint, 2))
 local intbits = math.floor(math.log(maxint, 2) + 0.5) + 1
+print("intbits")
+print(intbits)
+print("----")
 assert((1 << intbits) == 0)
 
 assert(minint == 1 << (intbits - 1))

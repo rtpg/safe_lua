@@ -1,3 +1,4 @@
+#![allow(unused_must_use)]
 use std::io::{stdin, stdout, Write};
 use termion::event::Key;
 use termion::input::TermRead;
@@ -17,9 +18,9 @@ fn fpos(frame: &TFrame, x: u16, y: u16) -> termion::cursor::Goto {
 }
 
 fn fhline<W: std::io::Write>(out: &mut RawTerminal<W>, frame: &TFrame, y: u16) {
-    write!(out, "{}", fpos(frame, 0, y));
-    for x in 0..frame.width {
-        write!(out, "-");
+    write!(out, "{}", fpos(frame, 0, y)).unwrap();
+    for _ in 0..frame.width {
+        write!(out, "-").unwrap();
     }
 }
 
@@ -28,7 +29,7 @@ fn draw_bytecode<W: std::io::Write>(out: &mut RawTerminal<W>, frame: &TFrame) {
     fhline(out, frame, 0);
     // frames
     for idx in 1..(frame.height - 1) {
-        write!(out, "{}|Byte {}", fpos(frame, 0, idx), idx,);
+        write!(out, "{}|Byte {}", fpos(frame, 0, idx), idx,).unwrap();
     }
     // bottom line
     fhline(out, frame, frame.height - 1);
@@ -82,7 +83,8 @@ fn draw_debugger_state<W: std::io::Write>(stdout: &mut RawTerminal<W>) {
      * |          |         |
      * ----------------------
      * (q to quit)
-     **/
+     *
+     */
     let bytecode_frame = TFrame {
         x: 2,
         y: 2,

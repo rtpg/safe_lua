@@ -9,9 +9,9 @@ use super::natives::{lua_assert, lua_print, lua_require};
 use natives::lua_type;
 use numbers::lua_tonumber;
 use parse::parse;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::{cell::RefCell, ops::Neg};
 
 // debug toggles
 const DBG_PRINT_INSTRUCTIONS: bool = false;
@@ -37,12 +37,20 @@ pub fn lua_hash(v: &LV) -> LuaHash {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum LNum {
     Int(i64),
     Float(f64),
 }
 
+impl LNum {
+    pub fn floor(self) -> LNum {
+        match self {
+            LNum::Int(_) => self,
+            LNum::Float(v) => LNum::Float(v.floor()),
+        }
+    }
+}
 fn lnum_int(v: &LNum) -> i64 {
     use eval::LNum::*;
     match v {
@@ -54,7 +62,7 @@ fn lnum_int(v: &LNum) -> i64 {
 fn lnum_float(v: &LNum) -> f64 {
     match v {
         LNum::Int(v) => *v as f64,
-        LNum::Float(f) => f,
+        LNum::Float(f) => *f,
     }
 }
 
@@ -81,13 +89,13 @@ impl std::ops::Sub<&LNum> for &LNum {
     fn sub(self, rhs: &LNum) -> LNum {
         use self::LNum::*;
         // all usual operations convert integer to float
-        match self {
-            Int(v) => match rhs {
+        match *self {
+            Int(v) => match *rhs {
                 Int(w) => Int(v - w),
-                Float(w) => Float(v as f64 - w),
+                Float(w) => Float((v as f64) - w),
             },
-            Float(v) => match rhs {
-                Int(w) => Float(v - w as f64),
+            Float(v) => match *rhs {
+                Int(w) => Float(v - (w as f64)),
                 Float(w) => Float(v - w),
             },
         }
@@ -107,6 +115,17 @@ impl std::ops::Div<&LNum> for &LNum {
     }
 }
 
+impl Neg for LNum {
+    type Output = LNum;
+
+    fn neg(self) -> LNum {
+        use self::LNum::*;
+        match self {
+            Int(v) => Int(-v),
+            Float(v) => Float(-v),
+        }
+    }
+}
 impl std::ops::Mul<&LNum> for &LNum {
     type Output = LNum;
 
@@ -123,13 +142,13 @@ impl PartialOrd for LNum {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         use self::LNum::*;
         match self {
-            Int(v) => match w {
-                Int(w) => return Some(v.comp(w)),
-                Float(w) => return Some(v.comp(w)),
+            Int(v) => match other {
+                Int(w) => return v.partial_cmp(w),
+                Float(w) => return (&(*v as f64)).partial_cmp(w),
             },
-            Float(v) => match w {
-                Int(w) => return Some(v.comp(w)),
-                Float(w) => return Some(v.comp(w)),
+            Float(v) => match *other {
+                Int(w) => return v.partial_cmp(&(w as f64)),
+                Float(w) => return v.partial_cmp(&w),
             },
         }
     }
@@ -143,10 +162,10 @@ impl std::ops::Add<&LNum> for &LNum {
         match self {
             Int(v) => match rhs {
                 Int(w) => Int(v + w),
-                Float(w) => Float(v as f64 + w),
+                Float(w) => Float(*v as f64 + w),
             },
             Float(v) => match rhs {
-                Int(w) => Float(v + w as f64),
+                Int(w) => Float(v + *w as f64),
                 Float(w) => Float(v + w),
             },
         }
@@ -570,12 +589,12 @@ mod tests {
     fn test_env_inheritence() {
         let mut base_env = LuaEnv::new(HashMap::new(), None);
         assert_eq!(base_env.get("foo"), None);
-        base_env.set("foo".to_string(), LV::Num(1.0));
-        assert_eq!(base_env.get("foo"), Some(LV::Num(1.0)));
+        base_env.set("foo".to_string(), LV::Num(LNum::Float(1.0)));
+        assert_eq!(base_env.get("foo"), Some(LV::Num(LNum::Float(1.0))));
         let mut child_env = base_env.make_child_env();
-        assert_eq!(child_env.get("foo"), Some(LV::Num(1.0)));
-        child_env.set("foo".to_string(), LV::Num(2.0));
-        assert_eq!(child_env.get("foo"), Some(LV::Num(2.0)));
-        assert_eq!(base_env.get("foo"), Some(LV::Num(1.0)));
+        assert_eq!(child_env.get("foo"), Some(LV::Num(LNum::Float(1.0))));
+        child_env.set("foo".to_string(), LV::Num(LNum::Float(2.0)));
+        assert_eq!(child_env.get("foo"), Some(LV::Num(LNum::Float(2.0))));
+        assert_eq!(base_env.get("foo"), Some(LV::Num(LNum::Float(1.0))));
     }
 }

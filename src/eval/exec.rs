@@ -1,6 +1,7 @@
 use compile::{JumpTarget, BC};
 use eval::attr::getattr;
 use eval::lua_hash;
+use eval::LNum;
 use eval::LuaNative;
 use eval::LuaResult;
 use eval::LuaRunState;
@@ -95,7 +96,7 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
         let (line_no, lines) = f.code.sourcemap.get_lines_for_bytecode(f.pc);
         println!("!! failed on line {}", line_no);
         println!("--> {}", lines);
-        panic!(msg);
+        panic!("{}", msg);
     }
 
     fn peek(s: &LuaRunState) -> &LV {
@@ -168,7 +169,7 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
                 }
             }
         }
-        BC::PUSH_NUMBER(n) => push(s, LV::Num(*n)),
+        BC::PUSH_NUMBER(n) => push(s, LV::Num(LNum::Float(*n))),
         BC::PUSH_CODE_INDEX(n) => {
             let code_obj = s.current_frame.code.lookup_code_by_idx(*n);
             push(s, LV::Code(code_obj));
@@ -404,14 +405,25 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
                 Err(e) => {
                     dbg!(object);
                     dbg!(property);
+                    dbg!(e);
                     vm_panic!(s, "Tried to lookup a property but failed");
                 }
             }
         }
-        _ => {
-            dbg!(next_instruction);
-            vm_panic!(s, "Unhandled Bytecode");
-        }
+
+        BC::PUSH_ELLIPSIS => {}
+        BC::PUSH_NUMERAL(_) => {}
+        BC::SET_LOCAL => {}
+        BC::ARRAY_ACCESS => {}
+        BC::GOTO(_) => {}
+        BC::ASSIGN_ARR_ACCESS() => {}
+        BC::ASSIGN_DOT_ACCESS(_) => {}
+        BC::CALL_METHOD => {}
+        BC::JUMP_TRUE(_) => {}
+        BC::FOR_LOOP_INIT => {}
+        BC::FOR_LOOP_CHECK_CONDITION(_) => {}
+        BC::FOR_IN_LOOP_INIT => {}
+        BC::BREAK => {}
     }
     match intended_next_pc {
         Some(tgt) => match tgt {

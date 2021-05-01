@@ -1,3 +1,5 @@
+#![allow(unused_doc_comments)]
+#![allow(dead_code)]
 extern crate argh;
 extern crate nom;
 extern crate nom_locate;

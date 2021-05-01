@@ -1,17 +1,27 @@
 use datastructures::{lua_set_native, lua_ssetattr};
 use eval::{LuaResult, LuaRunState, LV};
 
+use eval::LNum;
 use eval::LuaErr;
 
-use crate::eval::LuaAllocator;
+use crate::{eval::LuaAllocator, natives::unwrap_single_arg};
 
-fn lua_coerce_number(v: &LV) -> Result<f64, LuaErr> {
+pub fn lfloat(f: f64) -> LV {
+    return LV::Num(LNum::Float(f));
+}
+
+pub fn lua_coerce_number(v: &LV) -> Result<f64, LuaErr> {
     match v {
-        LV::Num(n) => Ok(*n),
+        LV::Num(n) => match n {
+            LNum::Float(v) => Ok(*v),
+            LNum::Int(v) => Ok(*v as f64),
+        },
         _ => Err("Not a number".to_string()),
     }
 }
 pub fn lua_log(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
+    print!("LUA LOG ARGS");
+    dbg!(&args);
     let (x_num, maybe_base_num) = match &args {
         Some(LV::LuaList(v)) => {
             if v.len() == 0 {
@@ -25,7 +35,7 @@ pub fn lua_log(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
             };
             (first_result, second_result)
         }
-        _ => return Err("Invalid shape".to_string()),
+        Some(_) => return Err("Invalid shape".to_string()),
         None => return Err("Not enough arguments".to_string()),
     };
 
@@ -33,12 +43,28 @@ pub fn lua_log(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
         None => x_num.ln(),
         Some(base_num) => x_num.log(base_num),
     };
-    return Ok(LV::Num(result));
+    return Ok(lfloat(result));
+}
+
+pub fn lua_floor(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
+    let arg = unwrap_single_arg(args).ok_or_else(|| "missing arg".to_string())?;
+    match arg {
+        LV::Num(n) => match n {
+            LNum::Float(f) => Ok(LV::Num(LNum::Float(f.floor()))),
+            LNum::Int(_) => Ok(LV::Num(n)),
+        },
+        _ => not_number(),
+    }
+}
+
+fn not_number() -> LuaResult {
+    return Err("Provided value wasn't a number".to_string());
 }
 
 pub fn math_pkg(s: &mut LuaAllocator) -> LV {
     let mut pkg = s.allocate_tbl();
-    lua_set_native(&mut pkg, "log", lua_log);
-    lua_ssetattr(&mut pkg, "maxinteger", LV::Num(i64::MAX as f64));
+    lua_set_native(&mut pkg, "log", lua_log).unwrap();
+    lua_set_native(&mut pkg, "floor", lua_floor).unwrap();
+    lua_ssetattr(&mut pkg, "maxinteger", LV::Num(LNum::Int(i64::MAX))).unwrap();
     return pkg;
 }

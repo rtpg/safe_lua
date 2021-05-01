@@ -2,6 +2,8 @@ use eval::LuaExc;
 use eval::LuaResult;
 use eval::LV;
 use eval::LV::*;
+use lua_stdlib::math::lfloat;
+use lua_stdlib::math::lua_coerce_number;
 use natives::lua_fmt_for_print;
 use natives::lua_truthy;
 
@@ -78,14 +80,8 @@ pub fn lua_binop_leq_impl(l: &LV, r: &LV) -> bool {
     }
 }
 pub fn lua_exponent_eq<'a>(l: &LV, r: &LV) -> Result<LV, LuaExc> {
-    match l {
-        Num(ll) => match r {
-            Num(rr) => Ok(Num(ll.powf(*rr))),
-            _ => {
-                let msg = format!("Type mismatch on exponent. Received {0} and {1}", l, r);
-                Err(LuaExc { msg: msg })
-            }
-        },
+    match (lua_coerce_number(l), lua_coerce_number(r)) {
+        (Ok(ll), Ok(rr)) => Ok(lfloat(ll.powf(rr))),
         _ => {
             let msg = format!("Type mismatch on exponent. Received {0} and {1}", l, r);
             Err(LuaExc { msg: msg })
@@ -163,7 +159,7 @@ pub fn lua_binop_mod<'a>(l: &LV, r: &LV) -> LV {
                     // (floor division is //)
 
                     let floor_div = (n / m).floor();
-                    LV::Num(n - ((floor_div) * m))
+                    LV::Num(n - &(&(floor_div) * m))
                 }
                 _ => panic!("FAILURE (need to implement lua-bubbling failure)"),
             }
@@ -250,7 +246,7 @@ pub fn lua_binop_lshift<'a>(l: &LV, r: &LV) -> LuaResult {
             let int_m = try_convert_i32(m);
             match (int_n, int_m) {
                 (Ok(x), Ok(y)) => Ok(Num((x << y).into())),
-                _ => Err(format!("No integer conversions for {} and {}", n, m)),
+                _ => Err(format!("No integer conversions for {0} and {1}", n, m)),
             }
         }
         _ => Err(format!("Bitshift attempt for {} and {}", l, r)),

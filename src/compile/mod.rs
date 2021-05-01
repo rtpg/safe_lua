@@ -313,7 +313,7 @@ pub fn compile_stat<'a>(stat: ast::Stat<'a>, code: &mut impl Code<'a>) {
         RawExpr(e) => {
             // we'll push the value, then pop it
             {
-                push_expr(e, code);
+                push_expr(&e, code);
                 code.emit(BC::POP, None);
             }
         }
@@ -330,7 +330,7 @@ pub fn compile_stat<'a>(stat: ast::Stat<'a>, code: &mut impl Code<'a>) {
             // if it's false, skip over the block
             let start_position = code.emit_jump_location();
             // first, we evaluate the expression
-            push_expr(expr, code);
+            push_expr(&expr, code);
             // if it's false we jump to the end
             let jump_to_end = code.prep_fwd_jump();
             code.emit(BC::JUMP_FALSE(jump_to_end.clone()), None);
@@ -391,7 +391,7 @@ pub fn compile_stat<'a>(stat: ast::Stat<'a>, code: &mut impl Code<'a>) {
             // in an if statement, we need to evaluate the predicate
             // then jump to the right places
             // first, let's evaluate the predicate
-            push_expr(predicate, code);
+            push_expr(&predicate, code);
             let after_then_block = code.prep_fwd_jump();
             // this second statement is used to jump over elifs and else
             // blocks
@@ -406,7 +406,7 @@ pub fn compile_stat<'a>(stat: ast::Stat<'a>, code: &mut impl Code<'a>) {
             //next up we see if there's any elif to deal with
             for (pred, block) in elif_list {
                 // elifs work basically the same way
-                push_expr(pred, code);
+                push_expr(&pred, code);
                 let after_block = code.prep_fwd_jump();
                 code.emit(BC::JUMP_FALSE(after_block.clone()), None);
                 compile_block(block, code);
@@ -431,7 +431,7 @@ pub fn compile_stat<'a>(stat: ast::Stat<'a>, code: &mut impl Code<'a>) {
             let start_of_repeat = code.emit_jump_location();
             compile_block(block, code);
             // let's check the expression now
-            push_expr(expr, code);
+            push_expr(&expr, code);
             // then jump back to the top if needed
             code.emit(BC::JUMP_FALSE(start_of_repeat), None);
         }
@@ -483,11 +483,11 @@ pub fn compile_stat<'a>(stat: ast::Stat<'a>, code: &mut impl Code<'a>) {
             push_var_assignment(assignment_target, code);
         }
         For(name, start_value, limit, maybe_step, block) => {
-            push_expr(start_value, code);
-            push_expr(limit, code);
+            push_expr(&start_value, code);
+            push_expr(&limit, code);
             match maybe_step {
                 Some(step) => {
-                    push_expr(step, code);
+                    push_expr(&step, code);
                 }
                 None => {
                     // default step of 1
@@ -572,23 +572,23 @@ pub fn push_numeral<'a>(n: &String, code: &mut impl Code<'a>) {
         }
     }
 }
-pub fn push_expr<'a>(expr: ast::Expr<'a>, code: &mut impl Code<'a>) {
+pub fn push_expr<'a>(expr: &ast::Expr<'a>, code: &mut impl Code<'a>) {
     use ast::Expr::*;
 
     match expr {
-        Nil(loc) => code.emit(BC::PUSH_NIL, Some(loc)),
-        False(loc) => code.emit(BC::PUSH_FALSE, Some(loc)),
-        True(loc) => code.emit(BC::PUSH_TRUE, Some(loc)),
+        Nil(loc) => code.emit(BC::PUSH_NIL, Some(*loc)),
+        False(loc) => code.emit(BC::PUSH_FALSE, Some(*loc)),
+        True(loc) => code.emit(BC::PUSH_TRUE, Some(*loc)),
         Numeral(n, _loc) => {
             push_numeral(&n, code);
         }
-        LiteralString(s, loc) => code.emit(BC::PUSH_STRING(s.to_string()), Some(loc)),
-        Ellipsis(loc) => code.emit(BC::PUSH_ELLIPSIS, Some(loc)),
+        LiteralString(s, loc) => code.emit(BC::PUSH_STRING(s.to_string()), Some(*loc)),
+        Ellipsis(loc) => code.emit(BC::PUSH_ELLIPSIS, Some(*loc)),
         BinOp(left, op, right) => {
             // here we need to push the left and right expressions
             // then evaluate the operator
-            push_expr(*left, code);
-            push_expr(*right, code);
+            push_expr(left, code);
+            push_expr(right, code);
             // this should panic
             if let lex::LexValue::Keyword(raw_op) = op {
                 code.emit(BC::BINOP(raw_op.to_string()), None);
@@ -598,11 +598,11 @@ pub fn push_expr<'a>(expr: ast::Expr<'a>, code: &mut impl Code<'a>) {
         }
         UnOp(op, left) => {
             // here just have to process one operator
-            push_expr(*left, code);
+            push_expr(left, code);
             code.emit(BC::UNOP(op.to_string()), None);
         }
         Pref(prefixed_expr) => {
-            push_prefixexpr(*prefixed_expr, code);
+            push_prefixexpr(prefixed_expr, code);
         }
         Tbl(ctr, _loc) => {
             push_table(ctr, code);
@@ -712,12 +712,12 @@ pub fn push_table<'a>(
     }
 }
 
-pub fn push_prefixexpr<'a>(pexpr: ast::Prefixexpr<'a>, code: &mut impl Code<'a>) {
+pub fn push_prefixexpr<'a>(pexpr: &ast::Prefixexpr<'a>, code: &mut impl Code<'a>) {
     use ast::Prefix::*;
     use ast::Suffix::*;
 
     match pexpr.prefix {
-        ParenedExpr(e) => push_expr(e, code),
+        ParenedExpr(e) => push_expr(&e, code),
         Varname(n, loc) => push_variable(ast::Var::N(n.to_string(), loc), code),
     }
 
@@ -727,7 +727,7 @@ pub fn push_prefixexpr<'a>(pexpr: ast::Prefixexpr<'a>, code: &mut impl Code<'a>)
                 // a[b]
                 // a is already on the stack
                 // push b
-                push_expr(expr, code);
+                push_expr(&expr, code);
                 code.emit(BC::ARRAY_ACCESS, None);
             }
             DotAccess(name) => {
@@ -821,7 +821,10 @@ pub fn push_args<'a>(args: ast::Args<'a>, code: &mut impl Code<'a>) {
                 Some(exprs) => {
                     // f(a, b, c)
                     let expr_count = exprs.len();
-                    for expr in exprs {
+                    // since we build up the list a, b, c , we need to
+                    // build out the stack like c, b, a
+                    for idx in (expr_count - 1)..0 {
+                        let expr = &exprs[idx];
                         push_expr(expr, code);
                     }
                     code.emit(BC::BUILD_LIST(expr_count), None);

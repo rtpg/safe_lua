@@ -1,7 +1,7 @@
 use super::eval::LV;
 use eval::LuaAllocator;
 use std::collections::HashMap;
-mod math;
+pub mod math;
 
 pub fn stdlib<'a>(alloc: &mut LuaAllocator) -> HashMap<String, LV> {
     // all the standard lib stuff
