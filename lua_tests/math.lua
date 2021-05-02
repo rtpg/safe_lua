@@ -12,6 +12,8 @@ local intbits = math.floor(math.log(maxint, 2) + 0.5) + 1
 print("intbits")
 print(intbits)
 print("----")
+print("1 << intbits")
+print(1 << intbits)
 assert((1 << intbits) == 0)
 
 assert(minint == 1 << (intbits - 1))

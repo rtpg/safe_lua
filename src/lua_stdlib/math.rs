@@ -16,6 +16,18 @@ pub fn lua_coerce_number(v: &LV) -> Result<f64, LuaErr> {
             LNum::Float(v) => Ok(*v),
             LNum::Int(v) => Ok(*v as f64),
         },
+        LV::LuaS(_) => todo!("coerce string to number"),
+        _ => Err("Not a number".to_string()),
+    }
+}
+
+pub fn lua_coerce_int(v: &LV) -> Result<i64, LuaErr> {
+    match v {
+        LV::Num(n) => match n {
+            LNum::Float(v) => Ok(*v as i64),
+            LNum::Int(v) => Ok(*v),
+        },
+        LV::LuaS(_) => todo!("coerce string to int"),
         _ => Err("Not a number".to_string()),
     }
 }
@@ -59,10 +71,16 @@ fn not_number() -> LuaResult {
     return Err("Provided value wasn't a number".to_string());
 }
 
+#[test]
+fn test_overflow() {
+    assert_eq!(i64::MAX, i64::MIN.overflowing_sub(1).0);
+}
+
 pub fn math_pkg(s: &mut LuaAllocator) -> LV {
     let mut pkg = s.allocate_tbl();
     lua_set_native(&mut pkg, "log", lua_log).unwrap();
     lua_set_native(&mut pkg, "floor", lua_floor).unwrap();
     lua_ssetattr(&mut pkg, "maxinteger", LV::Num(LNum::Int(i64::MAX))).unwrap();
+    lua_ssetattr(&mut pkg, "mininteger", LV::Num(LNum::Int(i64::MIN))).unwrap();
     return pkg;
 }

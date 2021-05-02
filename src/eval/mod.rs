@@ -91,7 +91,7 @@ impl std::ops::Sub<&LNum> for &LNum {
         // all usual operations convert integer to float
         match *self {
             Int(v) => match *rhs {
-                Int(w) => Int(v - w),
+                Int(w) => Int(v.overflowing_sub(w).0),
                 Float(w) => Float((v as f64) - w),
             },
             Float(v) => match *rhs {

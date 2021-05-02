@@ -3,7 +3,7 @@ use eval::LuaResult;
 use eval::LV;
 use eval::LV::*;
 use lua_stdlib::math::lfloat;
-use lua_stdlib::math::lua_coerce_number;
+use lua_stdlib::math::{lua_coerce_int, lua_coerce_number};
 use natives::lua_fmt_for_print;
 use natives::lua_truthy;
 
@@ -238,16 +238,41 @@ fn try_convert_i32(fv: LNum) -> Result<i32, String> {
 use eval::LNum;
 use numbers::unwrap_num_or_stringed_num;
 
+use crate::eval::LuaErr;
+
+/**
+ * shifting logic to match lua
+ * l << r when shift_left, l >> r when not shift_left
+ **/
+
+fn lua_shift_logic(l: i64, r: i64, shift_left: bool) -> Result<i64, LuaErr> {
+    if r < 0 {
+        // reverse the direction
+        return lua_shift_logic(l, -r, !shift_left);
+    }
+    let downgraded_r = r as u32;
+    let shift_result = if shift_left {
+        // legit unsure of how this is supposed to work
+        l.overflowing_shl(downgraded_r)
+    } else {
+        l.overflowing_shr(downgraded_r)
+    };
+
+    if shift_result.1 {
+        // overflow
+        return Ok(0);
+    } else {
+        return Ok(shift_result.0);
+    }
+}
 pub fn lua_binop_lshift<'a>(l: &LV, r: &LV) -> LuaResult {
     match (unwrap_num_or_stringed_num(l), unwrap_num_or_stringed_num(r)) {
         (Ok(n), Ok(m)) => {
             // we need to confirm if we have integer representations
-            let int_n = try_convert_i32(n);
-            let int_m = try_convert_i32(m);
-            match (int_n, int_m) {
-                (Ok(x), Ok(y)) => Ok(Num((x << y).into())),
-                _ => Err(format!("No integer conversions for {0} and {1}", n, m)),
-            }
+            let int_n = lua_coerce_int(&LV::Num(n))?;
+            let int_m = lua_coerce_int(&LV::Num(m))?;
+            let result = lua_shift_logic(int_n, int_m, true)?;
+            return Ok(Num(LNum::Int(result)));
         }
         _ => Err(format!("Bitshift attempt for {} and {}", l, r)),
     }
