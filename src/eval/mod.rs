@@ -2,6 +2,8 @@
 #[allow(dead_code)]
 pub mod exec;
 pub mod attr;
+use crate::natives::LuaArgs;
+
 use super::ast;
 use super::compile::{compile, CodeObj};
 use super::lua_stdlib::stdlib;
@@ -20,7 +22,7 @@ const DBG_POP_PUSH: bool = false;
 // the type for native Lua functions
 pub type LuaErr = String;
 pub type LuaResult = Result<LV, LuaErr>;
-pub type LuaNative = fn(&LuaRunState, Option<LV>) -> LuaResult;
+pub type LuaNative = fn(&LuaRunState, &LuaArgs) -> LuaResult;
 // TODO move to datastructs
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub enum LuaHash {
@@ -48,6 +50,13 @@ impl LNum {
         match self {
             LNum::Int(_) => self,
             LNum::Float(v) => LNum::Float(v.floor()),
+        }
+    }
+
+    pub fn as_float(self) -> f64 {
+        match self {
+            LNum::Int(i) => i as f64,
+            LNum::Float(v) => v,
         }
     }
 }

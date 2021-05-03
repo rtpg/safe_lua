@@ -2,9 +2,8 @@ use eval::LuaResult;
 use eval::LuaRunState;
 use eval::LV;
 use eval::LV::*;
-use natives::unwrap_single_arg;
 
-use crate::eval::LNum;
+use crate::{eval::LNum, natives::LuaArgs};
 
 pub fn unwrap_num_or_stringed_num(l: &LV) -> Result<LNum, String> {
     // takes a number or a string and tries to unwrap it
@@ -19,12 +18,8 @@ pub fn unwrap_num_or_stringed_num(l: &LV) -> Result<LNum, String> {
     }
 }
 
-pub fn lua_tonumber<'a>(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
-    match unwrap_single_arg(args) {
-        Some(arg) => match unwrap_num_or_stringed_num(&arg) {
-            Ok(value) => Ok(Num(value)),
-            Err(err) => Err(err),
-        },
-        _ => Err("wrong arity".to_string()),
-    }
+pub fn lua_tonumber<'a>(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
+    let arg = args.get_lv_arg(0)?;
+    let value = unwrap_num_or_stringed_num(arg)?;
+    return Ok(Num(value));
 }

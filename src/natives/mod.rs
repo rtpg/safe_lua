@@ -1,7 +1,7 @@
 pub mod binops;
 pub mod package;
 
-use crate::eval::LuaErr;
+use crate::eval::{LNum, LuaErr};
 
 use super::eval::{LuaResult, LuaRunState, LV};
 
@@ -12,8 +12,27 @@ pub struct LuaArgs {
     pub args: Vec<LV>,
 }
 
+pub fn lua_coerce_lnum(v: &LV) -> Result<LNum, LuaErr> {
+    match v {
+        LV::Num(n) => Ok(*n),
+        LV::LuaS(_) => todo!("coerce string to number"),
+        _ => Err("Not a number".to_string()),
+    }
+}
+
 impl LuaArgs {
-    pub fn get_string_argument(&self, arg: usize) -> Result<String, LuaErr> {
+    pub fn get_lv_arg(&self, arg: usize) -> Result<&LV, LuaErr> {
+        match self.args.get(arg) {
+            None => Err("No argument".to_string()),
+            Some(v) => Ok(v),
+        }
+    }
+
+    pub fn get_lv_arg_or_none(&self, arg: usize) -> Option<&LV> {
+        return self.args.get(arg);
+    }
+
+    pub fn get_string_arg(&self, arg: usize) -> Result<String, LuaErr> {
         match self.args.get(arg) {
             None => Err("No argument".to_string()),
             Some(v) => match v {
@@ -22,33 +41,16 @@ impl LuaArgs {
             },
         }
     }
+
+    pub fn get_arg_as_number(&self, arg: usize) -> Result<LNum, LuaErr> {
+        let arg = self.get_lv_arg(arg)?;
+        return lua_coerce_lnum(arg);
+    }
 }
 
-pub fn unwrap_single_arg<'a>(args: Option<LV>) -> Option<LV> {
+pub fn unwrap_single_arg(args: &LuaArgs) -> Result<&LV, LuaErr> {
     // helper to unwrap a single arg from args
-    match args {
-        Some(LV::LuaList(req_args)) => {
-            // this means we have a list of args at least
-            match req_args.len() {
-                1 => {
-                    // we confirmed the single arg
-                    // unwrap is safe because of size check
-                    return Some(req_args.get(0).unwrap().clone());
-                }
-                _ => {
-                    dbg!(req_args);
-                    panic!("Too many args sent in");
-                }
-            }
-        }
-        Some(other) => {
-            dbg!(other);
-            panic!("Wrong arg type sent in");
-        }
-        None => {
-            panic!("No args sent in");
-        }
-    }
+    return args.get_lv_arg(0);
 }
 
 pub fn lua_truthy(elt: &LV) -> bool {
@@ -59,18 +61,12 @@ pub fn lua_truthy(elt: &LV) -> bool {
     }
 }
 
-pub fn lua_assert(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
-    match unwrap_single_arg(args) {
-        Some(arg) => {
-            if lua_truthy(&arg) {
-                Ok(arg.clone())
-            } else {
-                return Err("Assertion failure in Lua Execution".to_string());
-            }
-        }
-        None => {
-            return Err("Arity failulre calling assert".to_string());
-        }
+pub fn lua_assert(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
+    let arg = args.get_lv_arg(0)?;
+    if lua_truthy(&arg) {
+        Ok(arg.clone())
+    } else {
+        return Err("Assertion failure in Lua Execution".to_string());
     }
 }
 
@@ -84,19 +80,13 @@ pub fn lua_fmt_for_print(arg: &LV) -> String {
         }
     }
 }
-pub fn lua_print(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
-    match unwrap_single_arg(args) {
-        Some(arg) => {
-            println!("{}", lua_fmt_for_print(&arg));
-            return Ok(LV::LuaNil);
-        }
-        None => {
-            return Err("Wrong arity for lua_print".to_string());
-        }
-    }
+pub fn lua_print(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
+    let arg = args.get_lv_arg(0)?;
+    println!("{}", lua_fmt_for_print(arg));
+    return Ok(LV::LuaNil);
 }
 
-fn lua_type_internal(arg: LV) -> String {
+fn lua_type_internal(arg: &LV) -> String {
     match arg {
         LV::LuaTrue => "boolean".to_string(),
         LV::LuaFalse => "boolean".to_string(),
@@ -112,41 +102,21 @@ fn lua_type_internal(arg: LV) -> String {
         }
     }
 }
-pub fn lua_type<'a>(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
-    match unwrap_single_arg(args) {
-        Some(arg) => {
-            let type_name = lua_type_internal(arg);
-            return Ok(LV::LuaS(type_name));
-        }
-        None => {
-            return Err("Wrong arity".to_string());
-        }
-    }
+pub fn lua_type<'a>(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
+    let arg = unwrap_single_arg(args)?;
+    let type_name = lua_type_internal(arg);
+    return Ok(LV::LuaS(type_name));
 }
-pub fn lua_require<'a>(s: &LuaRunState, args: Option<LV>) -> LuaResult {
-    match unwrap_single_arg(args) {
-        Some(arg) => {
-            match arg {
-                LV::LuaS(package_name) => {
-                    dbg!("TRYING TO LOOKUP");
-                    dbg!(&package_name);
-                    match s.packages.get(&package_name) {
-                        // TODO noclone
-                        Some(package) => return Ok(package.clone()),
-                        None => {
-                            dbg!(package_name);
-                            panic!("Failed package import");
-                        }
-                    }
-                }
-                _ => {
-                    dbg!(arg);
-                    panic!("Wrong type passed into string");
-                }
-            }
-        }
-        _ => {
-            panic!("Incorrect requirement args");
+pub fn lua_require<'a>(s: &LuaRunState, args: &LuaArgs) -> LuaResult {
+    let package_name = args.get_string_arg(0)?;
+    dbg!("TRYING TO LOOKUP");
+    dbg!(&package_name);
+    match s.packages.get(&package_name) {
+        // TODO noclone
+        Some(package) => return Ok(package.clone()),
+        None => {
+            dbg!(package_name);
+            panic!("Failed package import");
         }
     }
 }

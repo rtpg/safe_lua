@@ -4,7 +4,10 @@ use eval::{LuaResult, LuaRunState, LV};
 use eval::LNum;
 use eval::LuaErr;
 
-use crate::{eval::LuaAllocator, natives::unwrap_single_arg};
+use crate::{
+    eval::LuaAllocator,
+    natives::{lua_coerce_lnum, LuaArgs},
+};
 
 pub fn lfloat(f: f64) -> LV {
     return LV::Num(LNum::Float(f));
@@ -31,37 +34,26 @@ pub fn lua_coerce_int(v: &LV) -> Result<i64, LuaErr> {
         _ => Err("Not a number".to_string()),
     }
 }
-pub fn lua_log(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
-    let (x_num, maybe_base_num) = match &args {
-        Some(LV::LuaList(v)) => {
-            if v.len() == 0 {
-                return Err("Not enough arguments".to_string());
-            }
-            let first_result = lua_coerce_number(&v[0])?;
-            let second_result = if v.len() > 1 {
-                Some(lua_coerce_number(&v[1])?)
-            } else {
-                None
-            };
-            (first_result, second_result)
-        }
-        Some(_) => return Err("Invalid shape".to_string()),
-        None => return Err("Not enough arguments".to_string()),
+pub fn lua_log(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
+    let x_num = args.get_arg_as_number(0)?;
+    let maybe_base_num = match args.get_lv_arg_or_none(1) {
+        None => None,
+        Some(v) => Some(lua_coerce_lnum(v)?),
     };
 
     let result = match maybe_base_num {
-        None => x_num.ln(),
-        Some(base_num) => x_num.log(base_num),
+        None => x_num.as_float().ln(),
+        Some(base_num) => x_num.as_float().log(base_num.as_float()),
     };
     return Ok(lfloat(result));
 }
 
-pub fn lua_floor(_s: &LuaRunState, args: Option<LV>) -> LuaResult {
-    let arg = unwrap_single_arg(args).ok_or_else(|| "missing arg".to_string())?;
+pub fn lua_floor(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
+    let arg = args.get_lv_arg(0)?;
     match arg {
         LV::Num(n) => match n {
             LNum::Float(f) => Ok(LV::Num(LNum::Float(f.floor()))),
-            LNum::Int(_) => Ok(LV::Num(n)),
+            LNum::Int(_) => Ok(LV::Num(*n)),
         },
         _ => not_number(),
     }

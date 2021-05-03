@@ -10,6 +10,7 @@ use eval::DBG_PRINT_INSTRUCTIONS;
 use eval::LV;
 use natives::binops::*;
 use natives::lua_truthy;
+use natives::LuaArgs;
 
 #[derive(Debug)]
 pub enum ExecResult {
@@ -459,7 +460,12 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState, _yield_result: Option<
 
 fn handle_native_call<'a, 'b>(s: &'b mut LuaRunState, f: LuaNative, args: LV) {
     // call a native function, and do all the proper error handling from it
-    let return_value = f(s, Some(args));
+    let lua_args = match args {
+        LV::LuaList(params) => LuaArgs { args: params },
+        _ => panic!("Received non-list as param in native call"),
+    };
+
+    let return_value = f(s, &lua_args);
     match return_value {
         Ok(result) => push(s, result),
         Err(err) => {
