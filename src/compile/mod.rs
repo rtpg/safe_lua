@@ -566,6 +566,7 @@ pub fn push_var_assignment<'a>(var: &ast::Var<'a>, code: &mut impl Code<'a>) {
 }
 
 pub fn numeral_to_lnum(n: &String) -> Result<LNum, LuaErr> {
+    let n = n.trim();
     if n.starts_with("0x") || n.starts_with("0X") {
         match parse_lua_hex(n) {
             Ok(v) => return Ok(v),
@@ -589,6 +590,12 @@ pub fn numeral_to_lnum(n: &String) -> Result<LNum, LuaErr> {
             Err(_) => return LuaErr::msg("Could not parse as number"),
         }
     }
+}
+
+#[test]
+fn test_numeral_to_lnum() {
+    assert_eq!(numeral_to_lnum(&"10 ".to_string()), Ok(LNum::Int(10)));
+    assert_eq!(numeral_to_lnum(&"3e0".to_string()), Ok(LNum::Float(3.0)));
 }
 
 pub fn push_numeral<'a>(n: &String, code: &mut impl Code<'a>) {

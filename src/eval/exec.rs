@@ -9,6 +9,7 @@ use eval::DBG_POP_PUSH;
 use eval::DBG_PRINT_INSTRUCTIONS;
 use eval::LV;
 use natives::binops::*;
+use natives::lua_coerce_lnum;
 use natives::lua_truthy;
 use natives::LuaArgs;
 
@@ -367,8 +368,8 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
         BC::UNOP(code) => {
             let value = pop!();
             match code.as_str() {
-                "-" => match value {
-                    LV::Num(n) => push(s, LV::Num(-n)),
+                "-" => match lua_coerce_lnum(&value) {
+                    Ok(v) => push(s, LV::Num(-v)),
                     _ => {
                         dbg!(value);
                         vm_panic!(s, "Attempted arithmetic on a non-number");

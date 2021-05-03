@@ -1,7 +1,10 @@
 pub mod binops;
 pub mod package;
 
-use crate::eval::{LNum, LuaErr};
+use crate::{
+    compile::numeral_to_lnum,
+    eval::{LNum, LuaErr},
+};
 
 use super::eval::{LuaResult, LuaRunState, LV};
 
@@ -15,7 +18,7 @@ pub struct LuaArgs {
 pub fn lua_coerce_lnum(v: &LV) -> Result<LNum, LuaErr> {
     match v {
         LV::Num(n) => Ok(*n),
-        LV::LuaS(_) => todo!("coerce string to number"),
+        LV::LuaS(s) => numeral_to_lnum(&s),
         _ => LuaErr::msg("Not a number"),
     }
 }

@@ -79,6 +79,11 @@ assert(0e12 == 0 and .0 == 0 and 0. == 0 and .2e2 == 20 and 2.E-1 == 0.2)
 
 do
   local a,b,c = "2", " 3e0 ", " 10  "
+  print(a) -- the stack is in the wrong order!!
+  assert(a+b==5)
+  assert(-b==-3)
+  assert(b+"2"==5)
+  assert("10"-c==0)
   assert(a+b == 5 and -b == -3 and b+"2" == 5 and "10"-c == 0)
   assert(type(a) == 'string' and type(b) == 'string' and type(c) == 'string')
   assert(a == "2" and b == " 3e0 " and c == " 10  " and -c == -"  10 ")
