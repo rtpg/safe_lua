@@ -2,6 +2,7 @@ use super::eval::LV;
 use eval::LuaAllocator;
 use std::collections::HashMap;
 pub mod math;
+pub mod string;
 
 pub fn stdlib<'a>(alloc: &mut LuaAllocator) -> HashMap<String, LV> {
     // all the standard lib stuff
@@ -9,6 +10,7 @@ pub fn stdlib<'a>(alloc: &mut LuaAllocator) -> HashMap<String, LV> {
     lib.insert("debug".to_string(), debug_mod(alloc));
     lib.insert("string".to_string(), _mod(alloc));
     lib.insert("math".to_string(), math::math_pkg(alloc));
+    lib.insert("string".to_string(), string::string_pkg(alloc));
     lib.insert("table".to_string(), _mod(alloc));
     lib.insert("io".to_string(), _mod(alloc));
     lib.insert("os".to_string(), _mod(alloc));

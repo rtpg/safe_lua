@@ -109,7 +109,15 @@ impl std::ops::Div<&LNum> for &LNum {
         use self::LNum::*;
 
         match (self, rhs) {
-            (Int(v), Int(w)) => Int(v / w),
+            (Int(v), Int(w)) => {
+                if *w == 0 {
+                    // implement divide by zero semantics even if the original
+                    // values where ints
+                    Float((*v as f64) / (*w as f64))
+                } else {
+                    Int(v / w)
+                }
+            }
             (_, _) => Float(lnum_float(self) / lnum_float(rhs)),
         }
     }

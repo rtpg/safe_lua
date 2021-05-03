@@ -1,7 +1,28 @@
 pub mod binops;
 pub mod package;
 
+use crate::eval::LuaErr;
+
 use super::eval::{LuaResult, LuaRunState, LV};
+
+/**
+ * helper struct to deal with arguments from lua
+ **/
+pub struct LuaArgs {
+    pub args: Vec<LV>,
+}
+
+impl LuaArgs {
+    pub fn get_string_argument(&self, arg: usize) -> Result<String, LuaErr> {
+        match self.args.get(arg) {
+            None => Err("No argument".to_string()),
+            Some(v) => match v {
+                LV::LuaS(s) => Ok(s.to_string()),
+                _ => Err("Non-string argument".to_string()),
+            },
+        }
+    }
+}
 
 pub fn unwrap_single_arg<'a>(args: Option<LV>) -> Option<LV> {
     // helper to unwrap a single arg from args

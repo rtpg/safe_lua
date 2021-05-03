@@ -1,7 +1,6 @@
 use compile::{JumpTarget, BC};
 use eval::attr::getattr;
 use eval::lua_hash;
-use eval::LNum;
 use eval::LuaNative;
 use eval::LuaResult;
 use eval::LuaRunState;
@@ -169,7 +168,7 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
                 }
             }
         }
-        BC::PUSH_NUMBER(n) => push(s, LV::Num(LNum::Float(*n))),
+        BC::PUSH_NUMBER(n) => push(s, LV::Num(*n)),
         BC::PUSH_CODE_INDEX(n) => {
             let code_obj = s.current_frame.code.lookup_code_by_idx(*n);
             push(s, LV::Code(code_obj));

@@ -8,12 +8,15 @@ pub mod utils;
 
 use ast;
 use ast::Name;
+use eval::LuaErr;
 use lex;
 use nom_locate::LocatedSpan;
 use parse::numbers::parse_lua_hex;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::rc::Rc;
+
+use crate::eval::LNum;
 
 // jump target shape
 #[derive(Clone, Debug)]
@@ -38,7 +41,7 @@ pub enum BC {
     PUSH_ELLIPSIS,
     PUSH_NUMERAL(String),
     PUSH_STRING(String),
-    PUSH_NUMBER(f64),
+    PUSH_NUMBER(LNum),
     PUSH_CODE_INDEX(usize),
     PUSH_NAMELIST(ast::Namelist, bool),
     PUSH_NEW_TBL,
@@ -119,6 +122,16 @@ pub enum BC {
     BREAK,
     // PANIC: just blow up
     PANIC(String),
+}
+
+impl BC {
+    pub fn push_int(n: i64) -> BC {
+        return BC::PUSH_NUMBER(LNum::Int(n));
+    }
+
+    pub fn push_float(f: f64) -> BC {
+        return BC::PUSH_NUMBER(LNum::Float(f));
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -492,7 +505,7 @@ pub fn compile_stat<'a>(stat: &ast::Stat<'a>, code: &mut impl Code<'a>) {
                 }
                 None => {
                     // default step of 1
-                    code.emit(BC::PUSH_NUMBER(1.0), None);
+                    code.emit(BC::push_int(1), None);
                 }
             }
             // here we use specialized op codes for for loops
@@ -552,11 +565,10 @@ pub fn push_var_assignment<'a>(var: &ast::Var<'a>, code: &mut impl Code<'a>) {
     }
 }
 
-pub fn push_numeral<'a>(n: &String, code: &mut impl Code<'a>) {
-    // we will parse out the value
+pub fn numeral_to_lnum(n: &String) -> Result<LNum, LuaErr> {
     if n.starts_with("0x") || n.starts_with("0X") {
         match parse_lua_hex(n) {
-            Ok(v) => code.emit(BC::PUSH_NUMBER(v), None),
+            Ok(v) => return Ok(v),
             Err(_) => {
                 dbg!(n);
                 panic!("PARSE FAILURE ON HEX NUMERAL");
@@ -564,12 +576,28 @@ pub fn push_numeral<'a>(n: &String, code: &mut impl Code<'a>) {
         }
     } else {
         // not hex
-        match n.parse::<f64>() {
-            Ok(v) => code.emit(BC::PUSH_NUMBER(v), None),
-            Err(_) => {
-                dbg!(n);
-                panic!("PARSE FAILURE ON NUMERAL");
-            }
+        // attempt an i64 parse first
+        let parse_i64 = n.parse::<i64>();
+
+        if parse_i64.is_ok() {
+            return Ok(LNum::Int(parse_i64.unwrap()));
+        }
+        // if not we want to try and parse as float
+        let parse_f64 = n.parse::<f64>();
+        match parse_f64 {
+            Ok(v) => return Ok(LNum::Float(v)),
+            Err(_) => return Err("Could not parse as number".to_string()),
+        }
+    }
+}
+
+pub fn push_numeral<'a>(n: &String, code: &mut impl Code<'a>) {
+    // we will parse out the value
+    match numeral_to_lnum(n) {
+        Ok(v) => code.emit(BC::PUSH_NUMBER(v), None),
+        Err(_) => {
+            dbg!(n);
+            panic!("PARSE FAILURE ON HEX NUMERAL")
         }
     }
 }
