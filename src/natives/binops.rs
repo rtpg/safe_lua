@@ -4,6 +4,7 @@ use eval::LV;
 use eval::LV::*;
 use lua_stdlib::math::lfloat;
 use lua_stdlib::math::{lua_coerce_int, lua_coerce_number};
+use natives::lua_coerce_lnum;
 use natives::lua_fmt_for_print;
 use natives::lua_truthy;
 
@@ -103,16 +104,15 @@ pub fn lua_binop_minus<'a>(l: &LV, r: &LV) -> LV {
     }
 }
 
-pub fn lua_binop_plus<'a>(l: &LV, r: &LV) -> LV {
-    match l {
-        Num(n) => match r {
-            Num(m) => LV::Num(n + m),
-            _ => panic!("FAILURE (need to implement lua-bubbling failure)"),
-        },
-        _ => {
-            dbg!(l);
-            dbg!(r);
-            panic!("need binop impl");
+pub fn lua_binop_plus(l: &LV, r: &LV) -> LV {
+    return lua_binop_plus_impl(l, r).unwrap();
+}
+pub fn lua_binop_plus_impl<'a>(l: &LV, r: &LV) -> LuaResult {
+    match (lua_coerce_lnum(l), lua_coerce_lnum(r)) {
+        (Ok(ll), Ok(rr)) => Ok(LV::Num(&ll + &rr)),
+        (_, _) => {
+            // TODO add metamethod mechanisms here
+            return LuaErr::msg(format!(""));
         }
     }
 }
@@ -134,7 +134,7 @@ pub fn lua_binop_times<'a>(l: &LV, r: &LV) -> LV {
 pub fn lua_binop_div<'a>(l: &LV, r: &LV) -> LuaResult {
     match (l, r) {
         (Num(n), Num(m)) => Ok(LV::Num(n / m)),
-        _ => Err(format!("Cant divide {} and {}", l, r)),
+        _ => LuaErr::msg(format!("Cant divide {} and {}", l, r).as_str()),
     }
 }
 
@@ -144,7 +144,7 @@ pub fn lua_binop_floordiv<'a>(l: &LV, r: &LV) -> LuaResult {
             let result = n / m;
             Ok(LV::Num(result.floor()))
         }
-        _ => Err(format!("Cant divide {} and {}", l, r)),
+        _ => LuaErr::msg(format!("Cant divide {} and {}", l, r).as_str()),
     }
 }
 
@@ -217,7 +217,7 @@ pub fn lua_binop_greater<'a>(l: &LV, r: &LV) -> LuaResult {
     match (l, r) {
         (Num(n), Num(m)) => Ok(if n > m { LV::LuaTrue } else { LV::LuaFalse }),
         (LuaS(s), LuaS(t)) => Ok(if s > t { LV::LuaTrue } else { LV::LuaFalse }),
-        _ => Err(format!("Attempt to compare {} and {}", l, r)),
+        _ => LuaErr::msg(format!("Attempt to compare {} and {}", l, r).as_str()),
     }
 }
 
@@ -274,7 +274,7 @@ pub fn lua_binop_lshift<'a>(l: &LV, r: &LV) -> LuaResult {
             let result = lua_shift_logic(int_n, int_m, true)?;
             return Ok(Num(LNum::Int(result)));
         }
-        _ => Err(format!("Bitshift attempt for {} and {}", l, r)),
+        _ => LuaErr::msg(format!("Bitshift attempt for {} and {}", l, r).as_str()),
     }
 }
 
@@ -286,10 +286,10 @@ pub fn lua_binop_rshift<'a>(l: &LV, r: &LV) -> LuaResult {
             let int_m = try_convert_i32(m);
             match (int_n, int_m) {
                 (Ok(x), Ok(y)) => Ok(Num((x >> y).into())),
-                _ => Err(format!("No integer conversions for {} and {}", n, m)),
+                _ => LuaErr::msg(format!("No integer conversions for {} and {}", n, m).as_str()),
             }
         }
-        _ => Err(format!("Bitshift attempt for {} and {}", l, r)),
+        _ => LuaErr::msg(format!("Bitshift attempt for {} and {}", l, r).as_str()),
     }
 }
 
@@ -301,10 +301,10 @@ pub fn lua_binop_binor<'a>(l: &LV, r: &LV) -> LuaResult {
             let int_m = try_convert_i32(m);
             match (int_n, int_m) {
                 (Ok(x), Ok(y)) => Ok(Num((x | y).into())),
-                _ => Err(format!("No integer conversions for {} and {}", n, m)),
+                _ => LuaErr::msg(format!("No integer conversions for {} and {}", n, m).as_str()),
             }
         }
-        _ => Err(format!("Bitshift attempt for {} and {}", l, r)),
+        _ => LuaErr::msg(format!("Bitshift attempt for {} and {}", l, r).as_str()),
     }
 }
 
@@ -316,10 +316,10 @@ pub fn lua_binop_binand<'a>(l: &LV, r: &LV) -> LuaResult {
             let int_m = try_convert_i32(m);
             match (int_n, int_m) {
                 (Ok(x), Ok(y)) => Ok(Num((x & y).into())),
-                _ => Err(format!("No integer conversions for {} and {}", n, m)),
+                _ => LuaErr::msg(format!("No integer conversions for {} and {}", n, m).as_str()),
             }
         }
-        _ => Err(format!("Bitshift attempt for {} and {}", l, r)),
+        _ => LuaErr::msg(format!("Bitshift attempt for {} and {}", l, r).as_str()),
     }
 }
 
@@ -331,10 +331,10 @@ pub fn lua_binop_binxor<'a>(l: &LV, r: &LV) -> LuaResult {
             let int_m = try_convert_i32(m);
             match (int_n, int_m) {
                 (Ok(x), Ok(y)) => Ok(Num((x ^ y).into())),
-                _ => Err(format!("No integer conversions for {} and {}", n, m)),
+                _ => LuaErr::msg(format!("No integer conversions for {} and {}", n, m).as_str()),
             }
         }
-        _ => Err(format!("Bitshift attempt for {} and {}", l, r)),
+        _ => LuaErr::msg(format!("Bitshift attempt for {} and {}", l, r).as_str()),
     }
 }
 

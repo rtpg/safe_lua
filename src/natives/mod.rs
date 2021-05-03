@@ -16,14 +16,14 @@ pub fn lua_coerce_lnum(v: &LV) -> Result<LNum, LuaErr> {
     match v {
         LV::Num(n) => Ok(*n),
         LV::LuaS(_) => todo!("coerce string to number"),
-        _ => Err("Not a number".to_string()),
+        _ => LuaErr::msg("Not a number"),
     }
 }
 
 impl LuaArgs {
     pub fn get_lv_arg(&self, arg: usize) -> Result<&LV, LuaErr> {
         match self.args.get(arg) {
-            None => Err("No argument".to_string()),
+            None => LuaErr::msg("No argument"),
             Some(v) => Ok(v),
         }
     }
@@ -34,10 +34,10 @@ impl LuaArgs {
 
     pub fn get_string_arg(&self, arg: usize) -> Result<String, LuaErr> {
         match self.args.get(arg) {
-            None => Err("No argument".to_string()),
+            None => LuaErr::msg("No argument"),
             Some(v) => match v {
                 LV::LuaS(s) => Ok(s.to_string()),
-                _ => Err("Non-string argument".to_string()),
+                _ => LuaErr::msg("Non-string argument"),
             },
         }
     }
@@ -66,7 +66,7 @@ pub fn lua_assert(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
     if lua_truthy(&arg) {
         Ok(arg.clone())
     } else {
-        return Err("Assertion failure in Lua Execution".to_string());
+        return LuaErr::msg("Assertion failure in Lua Execution");
     }
 }
 

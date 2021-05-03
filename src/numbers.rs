@@ -3,18 +3,21 @@ use eval::LuaRunState;
 use eval::LV;
 use eval::LV::*;
 
-use crate::{eval::LNum, natives::LuaArgs};
+use crate::{
+    eval::{LNum, LuaErr},
+    natives::LuaArgs,
+};
 
-pub fn unwrap_num_or_stringed_num(l: &LV) -> Result<LNum, String> {
+pub fn unwrap_num_or_stringed_num(l: &LV) -> Result<LNum, LuaErr> {
     // takes a number or a string and tries to unwrap it
     // used by tonumber, among other things
     match l {
         Num(n) => Ok(*n),
         LuaS(s) => match s.parse::<f64>() {
             Ok(result) => Ok(LNum::Float(result)),
-            Err(_) => Err("not a number".to_string()),
+            Err(_) => LuaErr::msg("not a number"),
         },
-        _ => Err("not a number".to_string()),
+        _ => LuaErr::msg("not a number"),
     }
 }
 

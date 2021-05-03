@@ -20,7 +20,21 @@ const DBG_PRINT_INSTRUCTIONS: bool = false;
 const DBG_POP_PUSH: bool = false;
 
 // the type for native Lua functions
-pub type LuaErr = String;
+#[derive(Hash, PartialEq, Eq, Debug, Clone)]
+pub struct LuaErr {
+    _msg: String,
+}
+
+impl LuaErr {
+    /**
+     * Build an error that is just an error message
+     * (wrap in result cuz that's the usual use case)
+     **/
+    pub fn msg<T, S: Into<String>>(s: S) -> Result<T, LuaErr> {
+        return Err(LuaErr { _msg: s.into() });
+    }
+}
+
 pub type LuaResult = Result<LV, LuaErr>;
 pub type LuaNative = fn(&LuaRunState, &LuaArgs) -> LuaResult;
 // TODO move to datastructs

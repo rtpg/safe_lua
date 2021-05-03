@@ -20,7 +20,7 @@ pub fn lua_coerce_number(v: &LV) -> Result<f64, LuaErr> {
             LNum::Int(v) => Ok(*v as f64),
         },
         LV::LuaS(_) => todo!("coerce string to number"),
-        _ => Err("Not a number".to_string()),
+        _ => LuaErr::msg("Not a number"),
     }
 }
 
@@ -31,7 +31,7 @@ pub fn lua_coerce_int(v: &LV) -> Result<i64, LuaErr> {
             LNum::Int(v) => Ok(*v),
         },
         LV::LuaS(_) => todo!("coerce string to int"),
-        _ => Err("Not a number".to_string()),
+        _ => LuaErr::msg("Not a number"),
     }
 }
 pub fn lua_log(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
@@ -59,8 +59,17 @@ pub fn lua_floor(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
     }
 }
 
+pub fn lua_math_type(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
+    match args.get_lv_arg(0)? {
+        LV::Num(n) => match n {
+            LNum::Float(_) => Ok(LV::LuaS("float".to_string())),
+            LNum::Int(_) => Ok(LV::LuaS("integer".to_string())),
+        },
+        _ => Ok(LV::LuaNil),
+    }
+}
 fn not_number() -> LuaResult {
-    return Err("Provided value wasn't a number".to_string());
+    return LuaErr::msg("Provided value wasn't a number");
 }
 
 #[test]
@@ -72,6 +81,7 @@ pub fn math_pkg(s: &mut LuaAllocator) -> LV {
     let mut pkg = s.allocate_tbl();
     lua_set_native(&mut pkg, "log", lua_log).unwrap();
     lua_set_native(&mut pkg, "floor", lua_floor).unwrap();
+    lua_set_native(&mut pkg, "type", lua_math_type).unwrap();
     lua_ssetattr(&mut pkg, "maxinteger", LV::Num(LNum::Int(i64::MAX))).unwrap();
     lua_ssetattr(&mut pkg, "mininteger", LV::Num(LNum::Int(i64::MIN))).unwrap();
     return pkg;

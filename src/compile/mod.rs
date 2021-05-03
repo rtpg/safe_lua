@@ -586,7 +586,7 @@ pub fn numeral_to_lnum(n: &String) -> Result<LNum, LuaErr> {
         let parse_f64 = n.parse::<f64>();
         match parse_f64 {
             Ok(v) => return Ok(LNum::Float(v)),
-            Err(_) => return Err("Could not parse as number".to_string()),
+            Err(_) => return LuaErr::msg("Could not parse as number"),
         }
     }
 }

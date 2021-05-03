@@ -12,7 +12,7 @@ pub fn lua_ssetattr(tbl: &mut LV, key: &str, value: LV) -> Result<(), LuaErr> {
 pub fn lua_setattr(tbl: &mut LV, key: &LV, value: LV) -> Result<(), LuaErr> {
     let table_inner = match tbl {
         LV::LuaTable { v, .. } => v,
-        _ => return Err("Called lua_setattr on a non-table".to_string()),
+        _ => return LuaErr::msg("Called lua_setattr on a non-table"),
     };
 
     let mut table_data = table_inner.borrow_mut();
