@@ -11,9 +11,9 @@ use super::natives::{lua_assert, lua_print, lua_require};
 use natives::lua_type;
 use numbers::lua_tonumber;
 use parse::parse;
-use std::collections::HashMap;
 use std::rc::Rc;
 use std::{cell::RefCell, ops::Neg};
+use std::{collections::HashMap, hash::Hash, hash::Hasher};
 
 // debug toggles
 const DBG_PRINT_INSTRUCTIONS: bool = false;
@@ -41,11 +41,13 @@ pub type LuaNative = fn(&LuaRunState, &LuaArgs) -> LuaResult;
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub enum LuaHash {
     SHash(String),
+    NHash(LNum),
 }
 
 pub fn lua_hash(v: &LV) -> LuaHash {
     match v {
         LV::LuaS(s) => return LuaHash::SHash(s.to_string()),
+        LV::Num(n) => return LuaHash::NHash(*n),
         _ => {
             dbg!(v);
             todo!();
@@ -235,6 +237,7 @@ impl std::ops::BitOr for LNum {
         }
     }
 }
+impl Eq for LNum {}
 impl PartialEq for LNum {
     fn eq(&self, other: &LNum) -> bool {
         match self {
@@ -250,6 +253,22 @@ impl PartialEq for LNum {
     }
 }
 
+impl Hash for LNum {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let byte_repr: u64 = u64::from_ne_bytes(match self {
+            LNum::Int(i) => i.to_ne_bytes(),
+            LNum::Float(f) => f.to_ne_bytes(),
+        });
+        // we have the bytes then the type tag
+        let hash: u128 = ((byte_repr as u128) << 1)
+            + (match self {
+                LNum::Int(_) => 0,
+                LNum::Float(_) => 1,
+            });
+
+        state.write_u128(hash);
+    }
+}
 // our Lua values
 #[derive(Clone)]
 pub enum LV {
