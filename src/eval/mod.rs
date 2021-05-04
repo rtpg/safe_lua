@@ -108,16 +108,23 @@ impl std::fmt::Display for LNum {
 
 impl std::ops::Sub<&LNum> for &LNum {
     type Output = LNum;
-
     fn sub(self, rhs: &LNum) -> LNum {
+        return *self - *rhs;
+    }
+}
+
+impl std::ops::Sub<LNum> for LNum {
+    type Output = LNum;
+
+    fn sub(self, rhs: LNum) -> LNum {
         use self::LNum::*;
         // all usual operations convert integer to float
-        match *self {
-            Int(v) => match *rhs {
+        match self {
+            Int(v) => match rhs {
                 Int(w) => Int(v.overflowing_sub(w).0),
                 Float(w) => Float((v as f64) - w),
             },
-            Float(v) => match *rhs {
+            Float(v) => match rhs {
                 Int(w) => Float(v - (w as f64)),
                 Float(w) => Float(v - w),
             },
@@ -127,21 +134,27 @@ impl std::ops::Sub<&LNum> for &LNum {
 
 impl std::ops::Div<&LNum> for &LNum {
     type Output = LNum;
-
     fn div(self, rhs: &LNum) -> LNum {
+        return *self / *rhs;
+    }
+}
+impl std::ops::Div<LNum> for LNum {
+    type Output = LNum;
+
+    fn div(self, rhs: LNum) -> LNum {
         use self::LNum::*;
 
         match (self, rhs) {
             (Int(v), Int(w)) => {
-                if *w == 0 {
+                if w == 0 {
                     // implement divide by zero semantics even if the original
                     // values where ints
-                    Float((*v as f64) / (*w as f64))
+                    Float((v as f64) / (w as f64))
                 } else {
                     Int(v / w)
                 }
             }
-            (_, _) => Float(lnum_float(self) / lnum_float(rhs)),
+            (_, _) => Float(lnum_float(&self) / lnum_float(&rhs)),
         }
     }
 }

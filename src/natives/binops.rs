@@ -3,7 +3,7 @@ use eval::LuaResult;
 use eval::LV;
 use eval::LV::*;
 use lua_stdlib::math::lfloat;
-use lua_stdlib::math::{lua_coerce_int, lua_coerce_number};
+use lua_stdlib::math::{lua_coerce_float, lua_coerce_int};
 use natives::lua_coerce_lnum;
 use natives::lua_fmt_for_print;
 use natives::lua_truthy;
@@ -81,7 +81,7 @@ pub fn lua_binop_leq_impl(l: &LV, r: &LV) -> bool {
     }
 }
 pub fn lua_exponent_eq<'a>(l: &LV, r: &LV) -> Result<LV, LuaExc> {
-    match (lua_coerce_number(l), lua_coerce_number(r)) {
+    match (lua_coerce_float(l), lua_coerce_float(r)) {
         (Ok(ll), Ok(rr)) => Ok(lfloat(ll.powf(rr))),
         _ => {
             let msg = format!("Type mismatch on exponent. Received {0} and {1}", l, r);
@@ -125,75 +125,24 @@ macro_rules! binop {
 
 binop!(lua_binop_plus_int, lua_binop_plus, l, r, &l + &r);
 binop!(lua_binop_minus_int, lua_binop_minus, l, r, &l - &r);
-// pub fn lua_binop_plus(l: &LV, r: &LV) -> LV {
-//     return lua_binop_plus_impl(l, r).unwrap();
-// }
-// pub fn lua_binop_plus_impl<'a>(l: &LV, r: &LV) -> LuaResult {
-//     match (lua_coerce_lnum(l), lua_coerce_lnum(r)) {
-//         (Ok(ll), Ok(rr)) => Ok(LV::Num(&ll + &rr)),
-//         (_, _) => {
-//             // TODO add metamethod mechanisms here
-//             // dbg!(lua_coerce_lnum(l));
-//             // dbg!(lua_coerce_lnum(r));
-//             return LuaErr::msg(format!("{0} and {1} can't be added", l, r));
-//         }
-//     }
-// }
+binop!(lua_binop_times_int, lua_binop_times, l, r, &l * &r);
 
-pub fn lua_binop_times<'a>(l: &LV, r: &LV) -> LV {
-    match l {
-        Num(n) => match r {
-            Num(m) => LV::Num(n * m),
-            _ => panic!("FAILURE (need to implement lua-bubbling failure)"),
-        },
-        _ => {
-            dbg!(l);
-            dbg!(r);
-            panic!("need binop impl");
-        }
-    }
-}
+binop!(lua_binop_div, lua_binop_div_panic, l, r, &l / &r);
+binop!(
+    lua_binop_floordiv,
+    lua_binop_floordiv_panic,
+    l,
+    r,
+    (&l / &r).floor()
+);
 
-pub fn lua_binop_div<'a>(l: &LV, r: &LV) -> LuaResult {
-    match (l, r) {
-        (Num(n), Num(m)) => Ok(LV::Num(n / m)),
-        _ => LuaErr::msg(format!("Cant divide {} and {}", l, r).as_str()),
-    }
-}
-
-pub fn lua_binop_floordiv<'a>(l: &LV, r: &LV) -> LuaResult {
-    match (l, r) {
-        (Num(n), Num(m)) => {
-            let result = n / m;
-            Ok(LV::Num(result.floor()))
-        }
-        _ => LuaErr::msg(format!("Cant divide {} and {}", l, r).as_str()),
-    }
-}
-
-pub fn lua_binop_mod<'a>(l: &LV, r: &LV) -> LV {
-    match l {
-        Num(n) => {
-            match r {
-                Num(m) => {
-                    // from "Programming in Lua"
-                    // The following equation defines the modulo operator:
-                    // a % b == a - ((a // b) * b)
-                    // (floor division is //)
-
-                    let floor_div = (n / m).floor();
-                    LV::Num(n - &(&(floor_div) * m))
-                }
-                _ => panic!("FAILURE (need to implement lua-bubbling failure)"),
-            }
-        }
-        _ => {
-            dbg!(l);
-            dbg!(r);
-            panic!("need binop impl");
-        }
-    }
-}
+binop!(
+    lua_binop_mod_int,
+    lua_binop_mod,
+    l,
+    r,
+    l - &((&l / &r).floor()) * &r
+);
 
 pub fn lua_binop_and<'a>(l: &LV, r: &LV) -> LV {
     // lua considers false and nil to be falsy

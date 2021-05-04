@@ -365,7 +365,6 @@ pub fn compile_stat<'a>(stat: &ast::Stat<'a>, code: &mut impl Code<'a>) {
                     // all the names
                     let namelist_size = namelist.len();
                     for i in 0..namelist_size {
-                        // create assignment
                         code.emit(BC::ASSIGN_LOCAL_FROM_EXPRLIST(namelist[i].clone(), i), None)
                     }
                     code.emit(BC::POP, None);
@@ -825,8 +824,9 @@ pub fn push_exprlist<'a>(exprs: &std::vec::Vec<ast::Expr<'a>>, code: &mut impl C
     // being in the stack
     // [] -> [list_of_expressions]
     let expr_count = exprs.len();
-    for expr in exprs {
-        push_expr(&expr, code);
+    // push backwards so that the list is in the right order
+    for i in (0..expr_count).rev() {
+        push_expr(&exprs[i], code);
     }
     code.emit(BC::BUILD_LIST(expr_count), None);
 }

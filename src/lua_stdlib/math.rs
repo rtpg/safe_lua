@@ -13,14 +13,11 @@ pub fn lfloat(f: f64) -> LV {
     return LV::Num(LNum::Float(f));
 }
 
-pub fn lua_coerce_number(v: &LV) -> Result<f64, LuaErr> {
-    match v {
-        LV::Num(n) => match n {
-            LNum::Float(v) => Ok(*v),
-            LNum::Int(v) => Ok(*v as f64),
-        },
-        LV::LuaS(_) => todo!("coerce string to number"),
-        _ => LuaErr::msg("Not a number"),
+pub fn lua_coerce_float(v: &LV) -> Result<f64, LuaErr> {
+    let lnum_val = lua_coerce_lnum(v)?;
+    match lnum_val {
+        LNum::Float(w) => Ok(w),
+        LNum::Int(w) => Ok(w as f64),
     }
 }
 
