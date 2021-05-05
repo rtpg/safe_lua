@@ -37,6 +37,7 @@ impl LuaErr {
 
 pub type LuaResult = Result<LV, LuaErr>;
 pub type LuaNative = fn(&LuaRunState, &LuaArgs) -> LuaResult;
+
 // TODO move to datastructs
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub enum LuaHash {
@@ -283,6 +284,7 @@ pub enum LV {
     NativeFunc {
         name: String,
         f: LuaNative,
+        returns_multiple: bool,
     },
     LuaFunc {
         code_idx: usize,
@@ -323,7 +325,7 @@ fn lv_fmt(lv: &LV, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             .field("code_idx", code_idx)
             .field("args", args)
             .finish(),
-        NativeFunc { name, f: _ } => f.debug_struct("NativeFunc").field("name", name).finish(),
+        NativeFunc { name, f: _, .. } => f.debug_struct("NativeFunc").field("name", name).finish(),
         CodeIndex(n) => f.debug_struct("CodeIndex").field("v", n).finish(),
         NameList(namelist, ellipsis) => f
             .debug_struct("NameList")
@@ -545,13 +547,21 @@ impl<'a> LuaRunState {
         }
     }
 
-    fn return_from_funccall(&mut self, return_value: LV) {
-        // set up the return of the func call in the above frame and then execute further
-        // we'll first prep the frame
+    /**
+     *  return multiple values from a funccall
+     **/
+    fn return_multi_from_funccall(&mut self, return_values: Vec<LV>) {
         let mut previous_frame = self.frame_stack.pop().unwrap();
-        previous_frame.stack.push(return_value);
-        // then go to it
+        // the previous stack frame is going to get an exprlist on its stack
+        // (this is to handle all the association stuff nicely)
+
+        previous_frame.stack.push(LV::LuaList(return_values));
+        // then go to the frame
         self.current_frame = previous_frame;
+    }
+    fn return_from_funccall(&mut self, return_value: LV) {
+        // this is the same as just returning one element
+        self.return_multi_from_funccall(vec![return_value]);
     }
 
     pub fn load_code(&mut self, new_code_obj: CodeObj) {
@@ -588,6 +598,7 @@ pub fn global_env(stdlib: &HashMap<String, LV>) -> LuaEnv {
                 LV::NativeFunc {
                     name: $name.to_string(),
                     f: $func,
+                    returns_multiple: false,
                 },
             )
         };

@@ -56,6 +56,37 @@ pub fn lua_floor(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
     }
 }
 
+pub fn lua_math_modf(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
+    let arg = args.get_arg_as_number(0)?;
+    let integral_part = match arg {
+        LNum::Int(i) => LNum::Int(i),
+        LNum::Float(f) => {
+            if f.is_finite() {
+                LNum::Float(f.trunc())
+            } else {
+                LNum::Float(f)
+            }
+        }
+    };
+
+    let fractional_part = match arg {
+        LNum::Int(_i) => LNum::Float(0.0),
+        LNum::Float(f) => {
+            if f.is_finite() {
+                LNum::Float(f - f.trunc())
+            } else if f.is_nan() {
+                LNum::Float(f)
+            } else {
+                LNum::Float(0.0)
+            }
+        }
+    };
+
+    return Ok(LV::LuaList(vec![
+        LV::Num(integral_part),
+        LV::Num(fractional_part),
+    ]));
+}
 pub fn lua_math_type(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
     match args.get_lv_arg(0)? {
         LV::Num(n) => match n {
@@ -79,6 +110,8 @@ pub fn math_pkg(s: &mut LuaAllocator) -> LV {
     lua_set_native(&mut pkg, "log", lua_log).unwrap();
     lua_set_native(&mut pkg, "floor", lua_floor).unwrap();
     lua_set_native(&mut pkg, "type", lua_math_type).unwrap();
+    lua_set_native(&mut pkg, "modf", lua_math_modf).unwrap();
+    lua_ssetattr(&mut pkg, "huge", LV::Num(LNum::Float(f64::INFINITY))).unwrap();
     lua_ssetattr(&mut pkg, "maxinteger", LV::Num(LNum::Int(i64::MAX))).unwrap();
     lua_ssetattr(&mut pkg, "mininteger", LV::Num(LNum::Int(i64::MIN))).unwrap();
     return pkg;

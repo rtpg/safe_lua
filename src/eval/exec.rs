@@ -1,4 +1,5 @@
 use compile::{JumpTarget, BC};
+use datastructures::lua_getattr;
 use eval::attr::getattr;
 use eval::lua_hash;
 use eval::LuaNative;
@@ -88,6 +89,17 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
                 }
             }
         };
+    }
+
+    /**
+     * Print the current stack on the top frame (for debugging)
+     **/
+    fn lua_dbg_stack(s: &LuaRunState) {
+        println!("STACK NOW IS");
+        for value in &s.current_frame.stack.values {
+            println!("{:?}", value);
+        }
+        println!("======");
     }
 
     // fail the system
@@ -186,6 +198,8 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
             push(s, new_tbl);
         }
         BC::ASSIGN_TABLE_VALUE => {
+            print!("ASSIGN TABLE VALUE");
+            lua_dbg_stack(s);
             let value = pop!();
             let key = pop!();
             let tbl_wrapped = pop!();
@@ -203,7 +217,7 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
             // all the time
             // this is inheriting the same id s it's the "same" table
             push(s, LV::LuaTable { v: tbl, id: id });
-            vm_panic!(s, "TODO: implement assign table value");
+            // vm_panic!(s, "TODO: implement assign table value");
         }
         BC::POP => {
             pop!();
@@ -261,23 +275,33 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
             };
             push(s, result);
         }
-        BC::ASSIGN_LOCAL_FROM_EXPRLIST(name, sz) => match peek(s) {
-            LV::LuaList(l) => match l.get(*sz) {
-                Some(v) => {
-                    let v_clone = v.clone();
-                    s.current_frame.env.set(name.clone(), v_clone);
+        BC::ASSIGN_LOCAL_FROM_EXPRLIST(name, sz) => {
+            let to_assign = match peek(s) {
+                // if we have an exprlist we use that
+                LV::LuaList(l) => match l.get(*sz) {
+                    Some(v) => v,
+                    None => {
+                        dbg!(l);
+                        dbg!(sz);
+                        panic!("Failed getting local from exprlist");
+                    }
+                },
+                other => {
+                    // if the sz is 0 then we can handle that "directly"
+                    // (since we're getting the right kind of object here)
+                    if *sz == 0 {
+                        other
+                    } else {
+                        lua_dbg_stack(s);
+                        dbg!(other);
+                        panic!("Non-exprlist found");
+                    }
                 }
-                None => {
-                    dbg!(l);
-                    dbg!(sz);
-                    panic!("Failed getting local from exprlist");
-                }
-            },
-            other => {
-                dbg!(other);
-                panic!("Non-exprlist found");
-            }
-        },
+            };
+
+            let v_clone = to_assign.clone();
+            s.current_frame.env.set(name.clone(), v_clone);
+        }
         BC::BUILD_FUNCTION => {
             let namelist = pop!();
             let code_idx = pop!();
@@ -309,21 +333,24 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
             // ASSUME: exprlist top of stack
             // ASSUME: size exprlist >= idx
             let peeked_value = peek(s);
-            match peeked_value {
+            let extracted_value = match peeked_value {
                 LV::LuaList(vec) => match vec.get(*idx) {
-                    Some(val) => {
-                        let val_clone = val.clone();
-                        push(s, val_clone);
-                    }
+                    Some(val) => val,
                     None => {
                         panic!("exprlist too small");
                     }
                 },
                 other => {
-                    dbg!(other);
-                    panic!("Wrong kind of object on the stack")
+                    if *idx == 0 {
+                        other
+                    } else {
+                        dbg!(other);
+                        panic!("Wrong kind of object on the stack")
+                    }
                 }
-            }
+            };
+            let ev_clone = extracted_value.clone();
+            push(s, ev_clone);
         }
         BC::CALL_FUNCTION => {
             // TODO add a thing here to pop values cleanly
@@ -335,8 +362,12 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
             let m_func = pop!();
             // let's actually call the function
             match m_func {
-                LV::NativeFunc { name: _name, f } => {
-                    handle_native_call(s, f, args);
+                LV::NativeFunc {
+                    name: _name,
+                    f,
+                    returns_multiple,
+                } => {
+                    handle_native_call(s, f, args, returns_multiple);
                 }
                 LV::LuaFunc { .. } => {
                     // we queue up the new frame to continue executing
@@ -358,12 +389,32 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
         BC::JUMP(new_location) => {
             intended_next_pc = Some(new_location.clone());
         }
+        BC::UNWRAP_RETURN => {
+            // when we get a list return, unwrap it cleanly
+            let elt = pop!();
+            let to_push = match elt {
+                LV::LuaList(v) => {
+                    // unwrap
+                    v[0].clone()
+                }
+                other => other,
+            };
+            push(s, to_push);
+        }
         BC::RETURN_NONE => {
             s.return_from_funccall(LV::LuaNil);
         }
         BC::RETURN_VALUE => {
             let return_value = pop!();
             s.return_from_funccall(return_value);
+        }
+        BC::RETURN_MULTI(args) => {
+            let mut to_return: Vec<LV> = vec![];
+            for _ in 0..*args {
+                to_return.push(pop!());
+            }
+            to_return.reverse();
+            s.return_multi_from_funccall(to_return);
         }
         BC::UNOP(code) => {
             let value = pop!();
@@ -412,19 +463,55 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
             }
         }
 
-        BC::PUSH_ELLIPSIS => {}
-        BC::PUSH_NUMERAL(_) => {}
-        BC::SET_LOCAL => {}
-        BC::ARRAY_ACCESS => {}
-        BC::GOTO(_) => {}
-        BC::ASSIGN_ARR_ACCESS() => {}
-        BC::ASSIGN_DOT_ACCESS(_) => {}
-        BC::CALL_METHOD => {}
-        BC::JUMP_TRUE(_) => {}
-        BC::FOR_LOOP_INIT => {}
-        BC::FOR_LOOP_CHECK_CONDITION(_) => {}
-        BC::FOR_IN_LOOP_INIT => {}
-        BC::BREAK => {}
+        BC::PUSH_ELLIPSIS => {
+            todo!()
+        }
+        BC::PUSH_NUMERAL(_) => {
+            todo!()
+        }
+        BC::SET_LOCAL => {
+            todo!()
+        }
+        BC::ARRAY_ACCESS => {
+            // a[b]
+            // stack is in [a b] order
+            let key = pop!();
+            let arr = pop!();
+            match lua_getattr(&arr, &key) {
+                Ok(result) => push(s, result),
+                Err(err) => {
+                    dbg!(err);
+                    vm_panic!(s, "Failed on array access");
+                }
+            }
+        }
+        BC::GOTO(_) => {
+            todo!()
+        }
+        BC::ASSIGN_ARR_ACCESS() => {
+            todo!()
+        }
+        BC::ASSIGN_DOT_ACCESS(_) => {
+            todo!()
+        }
+        BC::CALL_METHOD => {
+            todo!()
+        }
+        BC::JUMP_TRUE(_) => {
+            todo!()
+        }
+        BC::FOR_LOOP_INIT => {
+            todo!()
+        }
+        BC::FOR_LOOP_CHECK_CONDITION(_) => {
+            todo!()
+        }
+        BC::FOR_IN_LOOP_INIT => {
+            todo!()
+        }
+        BC::BREAK => {
+            todo!()
+        }
     }
     match intended_next_pc {
         Some(tgt) => match tgt {
@@ -459,7 +546,12 @@ pub fn exec_to_next_yield<'a, 'b>(s: &'b mut LuaRunState, _yield_result: Option<
     }
 }
 
-fn handle_native_call<'a, 'b>(s: &'b mut LuaRunState, f: LuaNative, args: LV) {
+fn handle_native_call<'a, 'b>(
+    s: &'b mut LuaRunState,
+    f: LuaNative,
+    args: LV,
+    returns_multiple: bool,
+) {
     // call a native function, and do all the proper error handling from it
     let lua_args = match args {
         LV::LuaList(params) => LuaArgs { args: params },
@@ -468,7 +560,12 @@ fn handle_native_call<'a, 'b>(s: &'b mut LuaRunState, f: LuaNative, args: LV) {
 
     let return_value = f(s, &lua_args);
     match return_value {
-        Ok(result) => push(s, result),
+        Ok(result) => {
+            if returns_multiple && !matches!(result, LV::LuaList(_)) {
+                panic!("a native function returning multiple results must return a LuaList")
+            }
+            push(s, result);
+        }
         Err(err) => {
             vm_panic!(s, err);
         }

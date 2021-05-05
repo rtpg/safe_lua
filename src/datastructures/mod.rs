@@ -25,7 +25,22 @@ pub fn lua_set_native(tbl: &mut LV, key: &str, func: LuaNative) -> Result<(), Lu
     let lua_func = LV::NativeFunc {
         name: key.to_string(),
         f: func,
+        returns_multiple: false,
     };
 
     return lua_ssetattr(tbl, key, lua_func);
+}
+
+pub fn lua_getattr(tbl: &LV, key: &LV) -> Result<LV, LuaErr> {
+    // try to do tbl[key], basically
+    let hashed_key = lua_hash(key);
+    let tbl_inner = match tbl {
+        LV::LuaTable { v, .. } => v,
+        _ => return LuaErr::msg("Called lua_getattr on a non-table"),
+    };
+
+    match tbl_inner.borrow().get(&hashed_key) {
+        Some(v) => Ok(v.clone()),
+        None => Ok(LV::LuaNil),
+    }
 }

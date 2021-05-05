@@ -62,4 +62,5 @@ lua_tests! {
     test_utf8: "lua_tests/utf8.lua",
     test_vararg: "lua_tests/vararg.lua",
     test_verybig: "lua_tests/verybig.lua",
+    test_various: "lua_tests/various.lua",
 }

@@ -1,3 +1,4 @@
+pub mod assignment;
 /**
  * This file contains the tooling to turn
  * a bunch of lex tokens into a list of bytecode
@@ -79,11 +80,14 @@ pub enum BC {
     CALL_FUNCTION,
     // call function (method)
     CALL_METHOD,
-
+    // when a function/method isn't used for assignment, unwrap with this op
+    UNWRAP_RETURN,
     // return without a value
     RETURN_NONE,
     // return the top of the stack
     RETURN_VALUE,
+    // return N values from the top of the stack
+    RETURN_MULTI(usize),
     BUILD_LIST(usize),
     BUILD_FUNCTION,
 
@@ -326,7 +330,7 @@ pub fn compile_stat<'a>(stat: &ast::Stat<'a>, code: &mut impl Code<'a>) {
         RawExpr(e) => {
             // we'll push the value, then pop it
             {
-                push_expr(&e, code);
+                push_expr(&e, false, code);
                 code.emit(BC::POP, None);
             }
         }
@@ -343,7 +347,7 @@ pub fn compile_stat<'a>(stat: &ast::Stat<'a>, code: &mut impl Code<'a>) {
             // if it's false, skip over the block
             let start_position = code.emit_jump_location();
             // first, we evaluate the expression
-            push_expr(&expr, code);
+            push_expr(&expr, false, code);
             // if it's false we jump to the end
             let jump_to_end = code.prep_fwd_jump();
             code.emit(BC::JUMP_FALSE(jump_to_end.clone()), None);
@@ -356,17 +360,47 @@ pub fn compile_stat<'a>(stat: &ast::Stat<'a>, code: &mut impl Code<'a>) {
         }
         LocalNames(namelist, maybe_exprlist) => {
             //http://www.lua.org/manual/5.3/manual.html#3.3.3
-            // TODO last element of a function getting expanded
             match maybe_exprlist {
                 Some(exprlist) => {
+                    // x, y, z, alpha = f(), g()
+                    // we're going to call all of our expressions, then assign our values on the left
+                    // because we call our expressions one by one (backwards), we assign the variables afterwards
+                    // for example:
+                    //    call f
+                    //    call g
+                    //    assign_local_from_exprlist x 0
+                    //    pop
+                    //    assign_local_from_exprlist y 0
+                    //    assign_local_from_exprlist z 1
+                    //    assign_local_from_exprlist alpha 2
+                    //    pop
+                    //
                     // first we push the expression list
-                    push_exprlist(exprlist, code);
+                    let expr_count = exprlist.len();
+                    // push backwards so that the list is in the right order
+                    for i in (0..expr_count).rev() {
+                        push_expr(&exprlist[i], true, code);
+                    }
+
                     // then we will create assignment instructions for
                     // all the names
-                    let namelist_size = namelist.len();
-                    for i in 0..namelist_size {
-                        code.emit(BC::ASSIGN_LOCAL_FROM_EXPRLIST(namelist[i].clone(), i), None)
+                    let namelist_len = namelist.len();
+                    for i in 0..namelist_len {
+                        let exprlist_idx = if i < expr_count {
+                            0
+                        } else {
+                            i - expr_count + 1
+                        };
+
+                        code.emit(
+                            BC::ASSIGN_LOCAL_FROM_EXPRLIST(namelist[i].clone(), exprlist_idx),
+                            None,
+                        );
+                        if i < (expr_count - 1) {
+                            code.emit(BC::POP, None);
+                        }
                     }
+                    // cleanup pop at the end
                     code.emit(BC::POP, None);
                 }
                 None => {
@@ -382,18 +416,20 @@ pub fn compile_stat<'a>(stat: &ast::Stat<'a>, code: &mut impl Code<'a>) {
             code.emit(BC::ASSIGN_LOCAL_FROM_TOP_OF_STACK(name.to_string()), None);
         }
         Eql(varlist, exprlist) => {
-            // TODO right-most function expansion
-            push_exprlist(exprlist, code);
-            // once we have the exprlist on the top of the stack
-            // we'll try to assign to each variable
-            let varlist_len = varlist.vars.len();
-            for i in 0..varlist_len {
-                let var = &varlist.vars[i];
-                // first we extract out the value to assign...
-                code.emit(BC::EXTRACT_FROM_EXPRLIST(i), None);
-                // then we do the assignment
-                push_var_assignment(var, code);
-            }
+            // x, y, z, alpha = f(), g()
+            // we're going to call all of our expressions, then assign our values on the left
+            // because we call our expressions one by one (backwards), we assign the variables afterwards
+            // for example:
+            //    call f
+            //    call g
+            //    assign_local_from_exprlist x 0
+            //    pop
+            //    assign_local_from_exprlist y 0
+            //    assign_local_from_exprlist z 1
+            //    assign_local_from_exprlist alpha 2
+            //    pop
+
+            assignment::do_assignment(exprlist, varlist, code);
         }
         If {
             predicate,
@@ -404,7 +440,7 @@ pub fn compile_stat<'a>(stat: &ast::Stat<'a>, code: &mut impl Code<'a>) {
             // in an if statement, we need to evaluate the predicate
             // then jump to the right places
             // first, let's evaluate the predicate
-            push_expr(&predicate, code);
+            push_expr(&predicate, false, code);
             let after_then_block = code.prep_fwd_jump();
             // this second statement is used to jump over elifs and else
             // blocks
@@ -419,7 +455,7 @@ pub fn compile_stat<'a>(stat: &ast::Stat<'a>, code: &mut impl Code<'a>) {
             //next up we see if there's any elif to deal with
             for (pred, block) in elif_list {
                 // elifs work basically the same way
-                push_expr(&pred, code);
+                push_expr(&pred, false, code);
                 let after_block = code.prep_fwd_jump();
                 code.emit(BC::JUMP_FALSE(after_block.clone()), None);
                 compile_block(&block, code);
@@ -444,7 +480,7 @@ pub fn compile_stat<'a>(stat: &ast::Stat<'a>, code: &mut impl Code<'a>) {
             let start_of_repeat = code.emit_jump_location();
             compile_block(&block, code);
             // let's check the expression now
-            push_expr(&expr, code);
+            push_expr(&expr, false, code);
             // then jump back to the top if needed
             code.emit(BC::JUMP_FALSE(start_of_repeat), None);
         }
@@ -496,11 +532,11 @@ pub fn compile_stat<'a>(stat: &ast::Stat<'a>, code: &mut impl Code<'a>) {
             push_var_assignment(&assignment_target, code);
         }
         For(name, start_value, limit, maybe_step, block) => {
-            push_expr(&start_value, code);
-            push_expr(&limit, code);
+            push_expr(&start_value, false, code);
+            push_expr(&limit, false, code);
             match maybe_step {
                 Some(step) => {
-                    push_expr(&step, code);
+                    push_expr(&step, false, code);
                 }
                 None => {
                     // default step of 1
@@ -526,7 +562,7 @@ pub fn compile_stat<'a>(stat: &ast::Stat<'a>, code: &mut impl Code<'a>) {
             // for x,y,z,a in explist do block end
             // here the way this works is by evaluating explist
             // and then getting some data to be used as an iterator
-            push_exprlist(exprlist, code);
+            push_exprlist(exprlist, true, code);
 
             // so now we have the expression list, we then move to
             // starting up our for in loop
@@ -553,12 +589,12 @@ pub fn push_var_assignment<'a>(var: &ast::Var<'a>, code: &mut impl Code<'a>) {
             code.emit(BC::ASSIGN_NAME(name.to_string()), Some(*loc));
         }
         ArrAccess(prefix_expr, expr) => {
-            push_expr(&expr, code);
-            push_prefixexpr(&prefix_expr, code);
+            push_expr(&expr, false, code);
+            push_prefixexpr(&prefix_expr, false, code);
             code.emit(BC::ASSIGN_ARR_ACCESS(), None);
         }
         DotAccess(prefix_expr, name) => {
-            push_prefixexpr(&prefix_expr, code);
+            push_prefixexpr(&prefix_expr, false, code);
             code.emit(BC::ASSIGN_DOT_ACCESS(name.to_string()), None);
         }
     }
@@ -607,7 +643,7 @@ pub fn push_numeral<'a>(n: &String, code: &mut impl Code<'a>) {
         }
     }
 }
-pub fn push_expr<'a>(expr: &ast::Expr<'a>, code: &mut impl Code<'a>) {
+pub fn push_expr<'a>(expr: &ast::Expr<'a>, for_assignment: bool, code: &mut impl Code<'a>) {
     use ast::Expr::*;
 
     match expr {
@@ -622,8 +658,10 @@ pub fn push_expr<'a>(expr: &ast::Expr<'a>, code: &mut impl Code<'a>) {
         BinOp(left, op, right) => {
             // here we need to push the left and right expressions
             // then evaluate the operator
-            push_expr(left, code);
-            push_expr(right, code);
+            // these aren't used for assignment (so any function with multiple returns will have
+            // most of their results thrown away)
+            push_expr(left, false, code);
+            push_expr(right, false, code);
             // this should panic
             if let lex::LexValue::Keyword(raw_op) = op {
                 code.emit(BC::BINOP(raw_op.to_string()), None);
@@ -633,11 +671,11 @@ pub fn push_expr<'a>(expr: &ast::Expr<'a>, code: &mut impl Code<'a>) {
         }
         UnOp(op, left) => {
             // here just have to process one operator
-            push_expr(left, code);
+            push_expr(left, false, code);
             code.emit(BC::UNOP(op.to_string()), None);
         }
         Pref(prefixed_expr) => {
-            push_prefixexpr(prefixed_expr, code);
+            push_prefixexpr(prefixed_expr, for_assignment, code);
         }
         Tbl(ctr, _loc) => {
             push_table(&ctr, code);
@@ -723,20 +761,20 @@ pub fn push_table<'a>(
                 // then we'll push the value
                 match fld {
                     Bracketed(k, v) => {
-                        push_expr(&k, code);
-                        push_expr(&v, code);
+                        push_expr(&k, false, code);
+                        push_expr(&v, false, code);
                     }
                     Named(n, v) => {
                         // here we want to emit the string
                         code.emit(BC::PUSH_STRING(n.to_string()), None);
-                        push_expr(&v, code);
+                        push_expr(&v, false, code);
                     }
                     Raw(e) => {
                         code.emit(
-                            BC::PUSH_CODE_INDEX(raw_idx),
+                            BC::PUSH_NUMBER(LNum::Int(raw_idx)),
                             None, //                            BC::PUSH_NUMERAL(raw_idx.to_string()),
                         );
-                        push_expr(&e, code);
+                        push_expr(&e, false, code);
                         raw_idx += 1;
                     }
                 }
@@ -747,12 +785,16 @@ pub fn push_table<'a>(
     }
 }
 
-pub fn push_prefixexpr<'a>(pexpr: &ast::Prefixexpr<'a>, code: &mut impl Code<'a>) {
+pub fn push_prefixexpr<'a>(
+    pexpr: &ast::Prefixexpr<'a>,
+    for_assignment: bool,
+    code: &mut impl Code<'a>,
+) {
     use ast::Prefix::*;
     use ast::Suffix::*;
 
     match &pexpr.prefix {
-        ParenedExpr(e) => push_expr(&e, code),
+        ParenedExpr(e) => push_expr(&e, false, code),
         Varname(n, loc) => push_variable(ast::Var::N(n.to_string(), *loc), code),
     }
 
@@ -762,7 +804,7 @@ pub fn push_prefixexpr<'a>(pexpr: &ast::Prefixexpr<'a>, code: &mut impl Code<'a>
                 // a[b]
                 // a is already on the stack
                 // push b
-                push_expr(&expr, code);
+                push_expr(&expr, false, code);
                 code.emit(BC::ARRAY_ACCESS, None);
             }
             DotAccess(name) => {
@@ -787,6 +829,12 @@ pub fn push_prefixexpr<'a>(pexpr: &ast::Prefixexpr<'a>, code: &mut impl Code<'a>
                     Some(_n) => code.emit(BC::CALL_METHOD, None),
                     None => code.emit(BC::CALL_FUNCTION, None),
                 }
+                // if we aren't using the functions afterwards in assignment we should just unwrap
+                // This way of doing this is really not smart. The usual case will be to unwrap returns
+                // ideally we would have some smarter way of handling this
+                if !for_assignment {
+                    code.emit(BC::UNWRAP_RETURN, None);
+                }
             }
         }
     }
@@ -803,15 +851,15 @@ pub fn push_variable<'a>(v: ast::Var<'a>, code: &mut impl Code<'a>) {
         ArrAccess(prefix_expr, expr) => {
             // a[b]
             // push a
-            push_prefixexpr(&prefix_expr, code);
+            push_prefixexpr(&prefix_expr, false, code);
             // push b
-            push_expr(&expr, code);
+            push_expr(&expr, false, code);
             code.emit(BC::ARRAY_ACCESS, None);
         }
         DotAccess(prefix_expr, name) => {
             // a.b
             // push a
-            push_prefixexpr(&prefix_expr, code);
+            push_prefixexpr(&prefix_expr, false, code);
             // push b
             code.emit(BC::PUSH_STRING(name.to_string()), None);
             code.emit(BC::DOT_ACCESS, None);
@@ -819,14 +867,18 @@ pub fn push_variable<'a>(v: ast::Var<'a>, code: &mut impl Code<'a>) {
     }
 }
 
-pub fn push_exprlist<'a>(exprs: &std::vec::Vec<ast::Expr<'a>>, code: &mut impl Code<'a>) {
+pub fn push_exprlist<'a>(
+    exprs: &std::vec::Vec<ast::Expr<'a>>,
+    for_assignment: bool,
+    code: &mut impl Code<'a>,
+) {
     // take a list of expressions, and build the list from the values
     // being in the stack
     // [] -> [list_of_expressions]
     let expr_count = exprs.len();
     // push backwards so that the list is in the right order
     for i in (0..expr_count).rev() {
-        push_expr(&exprs[i], code);
+        push_expr(&exprs[i], for_assignment, code);
     }
     code.emit(BC::BUILD_LIST(expr_count), None);
 }
@@ -862,7 +914,8 @@ pub fn push_args<'a>(args: &ast::Args<'a>, code: &mut impl Code<'a>) {
 
                     for idx in (0..(expr_count)).rev() {
                         let expr = &exprs[idx];
-                        push_expr(expr, code);
+                        // TODO handle rightward expansion of args (3.4)
+                        push_expr(expr, false, code);
                     }
                     code.emit(BC::BUILD_LIST(expr_count), None);
                 }
@@ -920,19 +973,16 @@ pub fn compile_block<'a>(b: &ast::Block<'a>, code: &mut impl Code<'a>) {
                         let exprlist_len = exprlist.len();
                         if exprlist.len() == 1 {
                             // we'll do a simple return here
-                            push_expr(&exprlist[0].clone(), code);
+                            push_expr(&exprlist[0].clone(), false, code);
+                            code.emit(BC::RETURN_VALUE, None);
                         } else {
-                            // if we have multiple values we'll need to build up a
-                            // list on returning
+                            // if we're returning multiple values, then we need to
+                            // push all the results onto the stack first
                             for expr in exprlist.into_iter() {
-                                push_expr(&expr, code);
+                                push_expr(&expr, false, code);
                             }
-                            // this pops exprlist.len() elements to the stack
-                            // then adds one
-                            code.emit(BC::BUILD_LIST(exprlist_len), None);
+                            code.emit(BC::RETURN_MULTI(exprlist_len), None);
                         }
-                        // this removes the last element
-                        code.emit(BC::RETURN_VALUE, None);
                     }
                 }
             }
