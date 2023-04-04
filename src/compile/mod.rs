@@ -79,6 +79,8 @@ pub enum BC {
     // call function (normal)
     CALL_FUNCTION,
     // call function (method)
+    RUN_NATIVE_FUNC,
+    // call a native function
     CALL_METHOD,
     // when a function/method isn't used for assignment, unwrap with this op
     UNWRAP_RETURN,
@@ -180,6 +182,14 @@ impl Sourcemap {
                 .collect(),
         };
     }
+
+    pub fn native_srcmap() -> Sourcemap {
+        return Sourcemap {
+            map_data: vec![],
+            original_source: "<NATIVE CODE>".to_string(),
+            source_by_line: vec!["<NATIVE CODE>".to_string()],
+        };
+    }
     pub fn write_map<'a>(&mut self, bytecode_position: usize, location: LocatedSpan<&'a str>) {
         // write the mapping for the bytecode position
         if self.map_data.len() < bytecode_position + 1 {
@@ -249,6 +259,17 @@ pub struct CodeObj {
 impl CodeObj {
     pub fn lookup_code_by_idx<'b>(&'b self, idx: usize) -> Rc<CodeObj> {
         return self.inner_code[idx].clone();
+    }
+
+    pub fn native_obj() -> Rc<CodeObj> {
+        return Rc::new(CodeObj {
+            //bytecode here is just a single call to native
+            bytecode: vec![BC::RUN_NATIVE_FUNC],
+            sourcemap: Sourcemap::native_srcmap(),
+            inner_code: vec![],
+            labels: HashMap::new(),
+            jump_target: vec![],
+        });
     }
 }
 

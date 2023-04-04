@@ -70,7 +70,9 @@ pub fn lua_noop(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
     return Ok(LV::LuaNil);
 }
 
-pub fn lua_pcall(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {}
+pub fn lua_pcall(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
+    todo!()
+}
 
 pub fn lua_assert(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
     let arg = args.get_lv_arg(0)?;

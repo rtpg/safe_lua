@@ -15,8 +15,8 @@ use std::rc::Rc;
 use std::{cell::RefCell, ops::Neg};
 
 // debug toggles
-const DBG_PRINT_INSTRUCTIONS: bool = false;
-const DBG_POP_PUSH: bool = false;
+const DBG_PRINT_INSTRUCTIONS: bool = true;
+const DBG_POP_PUSH: bool = true;
 
 // the type for native Lua functions
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
@@ -288,6 +288,7 @@ pub enum LV {
     NativeFunc {
         name: String,
         f: LuaNative,
+        // XXX returns_multiple does nothing! returning LuaList signals that
         returns_multiple: bool,
     },
     LuaFunc {
@@ -419,6 +420,14 @@ pub struct LuaEnv {
 }
 
 impl LuaEnv {
+    fn empty() -> LuaEnv {
+        return LuaEnv {
+            data: Rc::new(RefCell::new(LuaEnvData {
+                _values: Rc::new(RefCell::new(HashMap::new())),
+                parent: None,
+            })),
+        };
+    }
     fn new(values: HashMap<String, LV>, parent: Option<LuaEnv>) -> LuaEnv {
         let new_parent = match parent {
             None => None,
@@ -478,6 +487,19 @@ impl LuaFrame {
             pc: 0,
             stack: LuaValueStack { values: vec![] },
             env,
+            protected_entry: protected_call,
+        };
+    }
+
+    pub fn frame_for_native_call(func: LV, args: LV, protected_call: bool) -> LuaFrame {
+        return LuaFrame {
+            code: CodeObj::native_obj(),
+            pc: 0,
+            stack: LuaValueStack {
+                values: vec![func, args],
+            },
+            /// XXX this is wrong
+            env: LuaEnv::empty(),
             protected_entry: protected_call,
         };
     }
@@ -559,6 +581,12 @@ impl<'a> LuaRunState {
                 new_frame.assign_args(args, provided_args);
                 // let's get this new frame set up
                 // TODO noclone
+                self.frame_stack.push(self.current_frame.clone());
+                self.current_frame = new_frame;
+            }
+            LV::NativeFunc { .. } => {
+                let mut new_frame =
+                    LuaFrame::frame_for_native_call(func, provided_args, protected_call);
                 self.frame_stack.push(self.current_frame.clone());
                 self.current_frame = new_frame;
             }

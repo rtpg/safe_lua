@@ -332,7 +332,7 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
                 LV::LuaList(vec) => match vec.get(*idx) {
                     Some(val) => val,
                     None => {
-                        panic!("exprlist too small");
+                        vm_panic!(s, "exprlist too small");
                     }
                 },
                 other => {
@@ -340,12 +340,37 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
                         other
                     } else {
                         dbg!(other);
-                        panic!("Wrong kind of object on the stack")
+                        vm_panic!(s, "Wrong kind of object on the stack");
                     }
                 }
             };
             let ev_clone = extracted_value.clone();
             push(s, ev_clone);
+        }
+        BC::RUN_NATIVE_FUNC => {
+            let args = pop!();
+            let m_func = pop!();
+            let lua_args = match args {
+                LV::LuaList(params) => LuaArgs { args: params },
+                _ => panic!("Received non-list as param in native call"),
+            };
+
+            match m_func {
+                LV::NativeFunc { f, .. } => {
+                    let return_value = f(s, &lua_args);
+                    match return_value {
+                        Ok(result) => match result {
+                            LV::LuaList(elts) => s.return_multi_from_funccall(elts),
+                            _ => s.return_from_funccall(result),
+                        },
+                        Err(err) => s.raise_error(err),
+                    }
+                }
+                _ => {
+                    dbg!(m_func);
+                    lua_fail(s, "Got a non-func to call");
+                }
+            }
         }
         BC::CALL_FUNCTION => {
             // TODO add a thing here to pop values cleanly
@@ -357,12 +382,9 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
             let m_func = pop!();
             // let's actually call the function
             match m_func {
-                LV::NativeFunc {
-                    name: _name,
-                    f,
-                    returns_multiple,
-                } => {
-                    handle_native_call(s, f, args, returns_multiple);
+                LV::NativeFunc { .. } => {
+                    s.enter_function_call(m_func, args, false);
+                    intended_next_pc = Some(JumpTarget::InnerFuncCall());
                 }
                 LV::LuaFunc { .. } => {
                     // we queue up the new frame to continue executing
