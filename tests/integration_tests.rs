@@ -55,6 +55,7 @@ lua_tests! {
     test_main: "lua_tests/main.lua",
     test_math: "lua_tests/math.lua",
     test_nextvar: "lua_tests/nextvar.lua",
+    test_pcalls: "lua_tests/pcalls.lua",
     test_pm: "lua_tests/pm.lua",
     test_sort: "lua_tests/sort.lua",
     test_strings: "lua_tests/strings.lua",

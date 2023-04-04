@@ -1,4 +1,3 @@
-use eval::LuaExc;
 use eval::LuaResult;
 use eval::LV;
 use eval::LV::*;
@@ -23,9 +22,9 @@ pub fn lua_binop_neq<'a>(l: &LV, r: &LV) -> LV {
     }
 }
 pub fn lua_binop_eq_impl(l: &LV, r: &LV) -> bool {
-    println!("RUNNING EQ ON");
-    dbg!(&l);
-    dbg!(&r);
+    // println!("RUNNING EQ ON");
+    // dbg!(&l);
+    // dbg!(&r);
     match l {
         LuaNil => {
             matches!(r, LuaNil)
@@ -80,12 +79,12 @@ pub fn lua_binop_leq_impl(l: &LV, r: &LV) -> bool {
         }
     }
 }
-pub fn lua_exponent_eq<'a>(l: &LV, r: &LV) -> Result<LV, LuaExc> {
+pub fn lua_exponent_eq<'a>(l: &LV, r: &LV) -> LuaResult {
     match (lua_coerce_float(l), lua_coerce_float(r)) {
         (Ok(ll), Ok(rr)) => Ok(lfloat(ll.powf(rr))),
         _ => {
             let msg = format!("Type mismatch on exponent. Received {0} and {1}", l, r);
-            Err(LuaExc { msg: msg })
+            return LuaErr::msg(msg);
         }
     }
 }
@@ -113,7 +112,7 @@ macro_rules! binop {
                     // TODO add metamethod mechanisms here
                     // dbg!(lua_coerce_lnum(l));
                     // dbg!(lua_coerce_lnum(r));
-                    return LuaErr::msg(format!("{0} and {1} can't be added ($name)", l, r));
+                    return LuaErr::msg(format!("{0} and {1} can't be added ($impl_name)", l, r));
                 }
             }
         }

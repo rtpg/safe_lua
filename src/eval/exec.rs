@@ -198,8 +198,8 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
             push(s, new_tbl);
         }
         BC::ASSIGN_TABLE_VALUE => {
-            print!("ASSIGN TABLE VALUE");
-            lua_dbg_stack(s);
+            // print!("ASSIGN TABLE VALUE");
+            // lua_dbg_stack(s);
             let value = pop!();
             let key = pop!();
             let tbl_wrapped = pop!();
@@ -239,41 +239,36 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
         BC::BINOP(binop) => {
             let r = pop!();
             let l = pop!();
-            let result = match binop.as_ref() {
-                "==" => lua_binop_eq(&l, &r),
-                "~=" => lua_binop_neq(&l, &r),
-                "^" => {
-                    match lua_exponent_eq(&l, &r) {
-                        Ok(v) => v,
-                        Err(err) => {
-                            // get the location
-                            vm_panic!(s, err);
-                        }
-                    }
-                }
-                "<=" => lua_binop_leq(&l, &r),
-                "-" => lua_binop_minus(&l, &r),
-                "+" => lua_binop_plus(&l, &r),
-                "*" => lua_binop_times(&l, &r),
-                "/" => unwrap_or_vm_panic(s, lua_binop_div(&l, &r)),
-                "//" => unwrap_or_vm_panic(s, lua_binop_floordiv(&l, &r)),
-                "<" => lua_binop_less(&l, &r),
-                ">" => unwrap_or_vm_panic(s, lua_binop_greater(&l, &r)),
-                "<<" => unwrap_or_vm_panic(s, lua_binop_lshift(&l, &r)),
-                ">>" => unwrap_or_vm_panic(s, lua_binop_rshift(&l, &r)),
-                "|" => unwrap_or_vm_panic(s, lua_binop_binor(&l, &r)),
-                "&" => unwrap_or_vm_panic(s, lua_binop_binand(&l, &r)),
-                "~" => unwrap_or_vm_panic(s, lua_binop_binxor(&l, &r)),
-                "and" => lua_binop_and(&l, &r),
-                "or" => lua_binop_or(&l, &r),
-                "%" => lua_binop_mod(&l, &r),
-                ".." => lua_binop_concat(&l, &r),
+            let result: LuaResult = match binop.as_ref() {
+                "==" => Ok(lua_binop_eq(&l, &r)),
+                "~=" => Ok(lua_binop_neq(&l, &r)),
+                "^" => lua_exponent_eq(&l, &r),
+                "<=" => Ok(lua_binop_leq(&l, &r)),
+                "-" => Ok(lua_binop_minus(&l, &r)),
+                "+" => lua_binop_plus_int(&l, &r),
+                "*" => Ok(lua_binop_times(&l, &r)),
+                "/" => lua_binop_div(&l, &r),
+                "//" => lua_binop_floordiv(&l, &r),
+                "<" => Ok(lua_binop_less(&l, &r)),
+                ">" => lua_binop_greater(&l, &r),
+                "<<" => lua_binop_lshift(&l, &r),
+                ">>" => lua_binop_rshift(&l, &r),
+                "|" => lua_binop_binor(&l, &r),
+                "&" => lua_binop_binand(&l, &r),
+                "~" => lua_binop_binxor(&l, &r),
+                "and" => Ok(lua_binop_and(&l, &r)),
+                "or" => Ok(lua_binop_or(&l, &r)),
+                "%" => Ok(lua_binop_mod(&l, &r)),
+                ".." => Ok(lua_binop_concat(&l, &r)),
                 _ => {
                     dbg!(binop);
                     vm_panic!(s, "unknown binop");
                 }
             };
-            push(s, result);
+            match result {
+                Ok(value) => push(s, value),
+                Err(err) => s.raise_error(err),
+            }
         }
         BC::ASSIGN_LOCAL_FROM_EXPRLIST(name, sz) => {
             let to_assign = match peek(s) {
@@ -373,7 +368,7 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
                     // we queue up the new frame to continue executing
                     // we also want to indicate that we want to shift the pc forward one
                     // the return will set the return value on the satck of the frame later
-                    s.enter_function_call(m_func, args);
+                    s.enter_function_call(m_func, args, false);
                     intended_next_pc = Some(JumpTarget::InnerFuncCall());
                 }
                 _ => {

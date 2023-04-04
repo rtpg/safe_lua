@@ -2,7 +2,7 @@
 #[allow(dead_code)]
 pub mod exec;
 pub mod attr;
-use crate::natives::LuaArgs;
+use crate::natives::{lua_noop, LuaArgs};
 
 use super::ast;
 use super::compile::{compile, CodeObj};
@@ -13,7 +13,6 @@ use numbers::lua_tonumber;
 use parse::parse;
 use std::rc::Rc;
 use std::{cell::RefCell, ops::Neg};
-use std::{collections::HashMap, hash::Hash, hash::Hasher};
 
 // debug toggles
 const DBG_PRINT_INSTRUCTIONS: bool = false;
@@ -173,14 +172,18 @@ impl Neg for LNum {
         }
     }
 }
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+};
+
 impl std::ops::Mul<&LNum> for &LNum {
     type Output = LNum;
 
     fn mul(self, rhs: &LNum) -> LNum {
         use self::LNum::*;
-
         match (self, rhs) {
-            (Int(v), Int(w)) => Int(v * w),
+            (Int(v), Int(w)) => Int(i64::wrapping_mul(*v, *w)),
             (_, _) => Float(lnum_float(self) * lnum_float(rhs)),
         }
     }
@@ -275,6 +278,7 @@ impl Hash for LNum {
 pub enum LV {
     Num(LNum),
     LuaS(String),
+    // this is actually an internal structure meant for multiple returns
     LuaList(Vec<LV>),
     LuaTable {
         // this id is for identity purposes
@@ -293,6 +297,8 @@ pub enum LV {
         ellipsis: bool,
         parent_env: LuaEnv,
     },
+    // Not great!
+    //
     // INTERNAL VALUES
     // This code index value is just becauze I have usize
     // and I think I need to be careful here
@@ -457,10 +463,24 @@ pub struct LuaFrame {
     pub code: Rc<CodeObj>, // the code itself
     pub pc: usize,         // program counter
     stack: LuaValueStack,  // value stack
+    protected_entry: bool, // whether we called this via pcall
+    // (so whether we should handle results cleanly)
+    // XXX in an alternate universe we'd add a pcall bytecode operator,
+    // and we could have a way to turn on protected calls and then turn it off
+    // (would be useful for supporting exception handling in general)
     env: LuaEnv,
 }
 
 impl LuaFrame {
+    pub fn from_code(code: Rc<CodeObj>, env: LuaEnv, protected_call: bool) -> LuaFrame {
+        return LuaFrame {
+            code,
+            pc: 0,
+            stack: LuaValueStack { values: vec![] },
+            env,
+            protected_entry: protected_call,
+        };
+    }
     fn assign_args(&mut self, arglist: Vec<String>, args: LV) {
         // we want to take every argument in the arglist and set it into the environment
         // as locals
@@ -521,7 +541,7 @@ impl LuaAllocator {
 }
 
 impl<'a> LuaRunState {
-    fn enter_function_call(&mut self, func: LV, provided_args: LV) {
+    fn enter_function_call(&mut self, func: LV, provided_args: LV, protected_call: bool) {
         // set up a new lua frame as the top level func and work from there
         match func {
             LV::LuaFunc {
@@ -534,7 +554,8 @@ impl<'a> LuaRunState {
                 if ellipsis {
                     panic!("TODO implement ellipsis function calls");
                 }
-                let mut new_frame = frame_from_code(code, parent_env.make_child_env());
+                let mut new_frame =
+                    LuaFrame::from_code(code, parent_env.make_child_env(), protected_call);
                 new_frame.assign_args(args, provided_args);
                 // let's get this new frame set up
                 // TODO noclone
@@ -550,11 +571,16 @@ impl<'a> LuaRunState {
     /**
      *  return multiple values from a funccall
      **/
-    fn return_multi_from_funccall(&mut self, return_values: Vec<LV>) {
+    fn return_multi_from_funccall(&mut self, mut return_values: Vec<LV>) {
+        let protected_return = self.current_frame.protected_entry;
+
         let mut previous_frame = self.frame_stack.pop().unwrap();
         // the previous stack frame is going to get an exprlist on its stack
         // (this is to handle all the association stuff nicely)
-
+        if protected_return {
+            // we need to provide the true just to say that an error didn't occur
+            return_values.insert(0, LV::LuaTrue)
+        }
         previous_frame.stack.push(LV::LuaList(return_values));
         // then go to the frame
         self.current_frame = previous_frame;
@@ -564,10 +590,33 @@ impl<'a> LuaRunState {
         self.return_multi_from_funccall(vec![return_value]);
     }
 
+    // XXX lua_fail should go through this
+    fn raise_error(&mut self, err: LuaErr) {
+        // here we are going to go up the stack until we find
+        // some protected call (or we are at the top)
+        while self.frame_stack.len() > 0 {
+            if self.current_frame.protected_entry {
+                // we'll return the value here
+                let mut previous_frame = self.frame_stack.pop().unwrap();
+                // we failed, so we'll add that to the stack (protected call)
+                previous_frame
+                    .stack
+                    .push(LV::LuaList(vec![LV::LuaFalse, LV::LuaS(err._msg)]));
+                self.current_frame = previous_frame;
+                return;
+            } else {
+                // we need to keep on going up the stack
+                self.current_frame = self.frame_stack.pop().unwrap();
+            }
+        }
+        // XXX we'll want to add more info on the failure later
+        vm_panic!(self, err._msg);
+    }
     pub fn load_code(&mut self, new_code_obj: CodeObj) {
         // load in a code object to run
         let boxed_code = Rc::new(new_code_obj);
-        let new_frame = frame_from_code(boxed_code.clone(), self.global_env.clone());
+
+        let new_frame = LuaFrame::from_code(boxed_code.clone(), self.global_env.clone(), false);
         self.current_frame = new_frame;
         self.frame_stack = vec![];
     }
@@ -615,6 +664,8 @@ pub fn global_env(stdlib: &HashMap<String, LV>) -> LuaEnv {
         global!("assert", lua_assert),
         global!("type", lua_type),
         global!("tonumber", lua_tonumber),
+        global!("collectgarbage", lua_noop),
+        global!("setmetatable", lua_noop),
         pkg!("string"),
         pkg!("math"),
         pkg!("table"),
@@ -626,15 +677,6 @@ pub fn global_env(stdlib: &HashMap<String, LV>) -> LuaEnv {
 
     return LuaEnv::new(globals.iter().cloned().collect(), None);
 }
-pub fn frame_from_code<'a>(code: Rc<CodeObj>, env: LuaEnv) -> LuaFrame {
-    return LuaFrame {
-        code: code,
-        pc: 0,
-        stack: LuaValueStack { values: vec![] },
-        env: env,
-    };
-}
-
 pub fn initial_run_state<'a>(contents: &'a str, lua_file_path: &'a str) -> LuaRunState {
     let parsed_content = parse(contents);
     let compiled_code = compile(parsed_content, contents);
@@ -645,7 +687,7 @@ pub fn initial_run_state<'a>(contents: &'a str, lua_file_path: &'a str) -> LuaRu
     let state = LuaRunState {
         file_path: String::from(lua_file_path),
         compiled_code: boxed_code.clone(),
-        current_frame: frame_from_code(boxed_code.clone(), env.clone()),
+        current_frame: LuaFrame::from_code(boxed_code.clone(), env.clone(), false),
         global_env: env,
         frame_stack: vec![],
         packages: packages,

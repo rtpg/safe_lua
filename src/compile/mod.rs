@@ -260,15 +260,15 @@ pub trait Code<'a> {
     // emit a noop and provide a jump target for later
     fn emit_jump_location(&mut self) -> JumpTarget;
     // save an inner code object, and return its index
-    fn write_inner_code(&mut self, CodeObj) -> usize;
+    fn write_inner_code(&mut self, _: CodeObj) -> usize;
     // add a label
-    fn add_label(&mut self, String);
+    fn add_label(&mut self, _: String);
     // prep a forward jump
     // this adds a jump command to a future line in bytecode
     // and then closes it out with set forward jump target
     fn prep_fwd_jump(&mut self) -> JumpTarget;
     // emit a NOOP and register the jump location
-    fn emit_fwd_jump_location(&mut self, JumpTarget);
+    fn emit_fwd_jump_location(&mut self, _: JumpTarget);
 }
 
 impl<'a> Code<'a> for CodeObj {

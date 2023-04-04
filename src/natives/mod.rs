@@ -64,6 +64,14 @@ pub fn lua_truthy(elt: &LV) -> bool {
     }
 }
 
+pub fn lua_noop(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
+    // this is a placeholder for a lot of stuff
+    eprintln!("Called noop");
+    return Ok(LV::LuaNil);
+}
+
+pub fn lua_pcall(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {}
+
 pub fn lua_assert(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
     let arg = args.get_lv_arg(0)?;
     if lua_truthy(&arg) {
@@ -112,8 +120,6 @@ pub fn lua_type<'a>(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
 }
 pub fn lua_require<'a>(s: &LuaRunState, args: &LuaArgs) -> LuaResult {
     let package_name = args.get_string_arg(0)?;
-    dbg!("TRYING TO LOOKUP");
-    dbg!(&package_name);
     match s.packages.get(&package_name) {
         // TODO noclone
         Some(package) => return Ok(package.clone()),
