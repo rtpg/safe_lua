@@ -70,7 +70,14 @@ pub fn lua_noop(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
     return Ok(LV::LuaNil);
 }
 
-pub fn lua_pcall(_s: &LuaRunState, args: &LuaArgs) -> LuaResult {
+pub fn lua_pcall(s: &LuaRunState, args: &LuaArgs) -> LuaResult {
+    /**
+     *  The idea here is that pcall should load up a frame that
+     *  will call things up in protected mode properly.
+     *
+     *  The ideal way to do this would be for us to actually just be able
+     *  to write up bytecode here as the function call.
+     ***/
     todo!()
 }
 

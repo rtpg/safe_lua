@@ -301,10 +301,12 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
             let namelist = pop!();
             let code_idx = pop!();
             let code = pop!();
+            let new_id = s.alloc.get_id();
             match (&namelist, &code_idx, &code) {
                 (LV::NameList(nl, ellipsis), LV::CodeIndex(idx), LV::Code(code)) => push(
                     s,
                     LV::LuaFunc {
+                        id: new_id,
                         code_idx: *idx,
                         code: code.clone(),
                         args: nl.to_vec(),
@@ -381,23 +383,8 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
             let args = pop!();
             let m_func = pop!();
             // let's actually call the function
-            match m_func {
-                LV::NativeFunc { .. } => {
-                    s.enter_function_call(m_func, args, false);
-                    intended_next_pc = Some(JumpTarget::InnerFuncCall());
-                }
-                LV::LuaFunc { .. } => {
-                    // we queue up the new frame to continue executing
-                    // we also want to indicate that we want to shift the pc forward one
-                    // the return will set the return value on the satck of the frame later
-                    s.enter_function_call(m_func, args, false);
-                    intended_next_pc = Some(JumpTarget::InnerFuncCall());
-                }
-                _ => {
-                    dbg!(m_func);
-                    lua_fail(s, "Got a non-func to call");
-                }
-            }
+            s.enter_function_call(m_func, args, false);
+            intended_next_pc = Some(JumpTarget::InnerFuncCall());
         }
         BC::PANIC(err_msg) => {
             dbg!(err_msg);

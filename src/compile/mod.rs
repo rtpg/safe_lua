@@ -76,6 +76,10 @@ pub enum BC {
     ASSIGN_ARR_ACCESS(),
     // $1.n = $2
     ASSIGN_DOT_ACCESS(Name),
+    // call into a do/end block
+    DO_BLOCK(usize),
+    // end a do block (thus fixing up the scope)
+    DO_BLOCK_END,
     // call function (normal)
     CALL_FUNCTION,
     // call function (method)

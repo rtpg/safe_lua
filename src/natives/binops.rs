@@ -48,11 +48,16 @@ pub fn lua_binop_eq_impl(l: &LV, r: &LV) -> bool {
             }
             _ => false,
         },
-        LuaFunc { .. } => todo!(),
+        LuaFunc { id, .. } => match r {
+            LuaFunc { id: id2, .. } => id == id2,
+            _ => false,
+        },
         CodeIndex(_) => todo!(),
         Code(_) => todo!(),
         NameList(_, _) => todo!(),
         NativeFunc { .. } => todo!(),
+        BytecodeFunc { .. } => todo!(),
+        PCall { .. } => todo!(),
     }
 }
 

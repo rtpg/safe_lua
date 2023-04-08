@@ -8,6 +8,7 @@ use super::ast;
 use super::compile::{compile, CodeObj};
 use super::lua_stdlib::stdlib;
 use super::natives::{lua_assert, lua_print, lua_require};
+use crate::compile::BC;
 use natives::lua_type;
 use numbers::lua_tonumber;
 use parse::parse;
@@ -291,7 +292,14 @@ pub enum LV {
         // XXX returns_multiple does nothing! returning LuaList signals that
         returns_multiple: bool,
     },
+    // Hack! to deal with the specialness of pcall
+    PCall,
+    BytecodeFunc {
+        name: String,
+        bytecode: Vec<BC>,
+    },
     LuaFunc {
+        id: usize,
         code_idx: usize,
         code: Rc<CodeObj>,
         args: ast::Namelist,
@@ -333,6 +341,8 @@ fn lv_fmt(lv: &LV, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             .field("args", args)
             .finish(),
         NativeFunc { name, f: _, .. } => f.debug_struct("NativeFunc").field("name", name).finish(),
+        BytecodeFunc { name, .. } => f.debug_struct("BytecodeFunc").field("name", name).finish(),
+        PCall => f.debug_struct("PCall").finish(),
         CodeIndex(n) => f.debug_struct("CodeIndex").field("v", n).finish(),
         NameList(namelist, ellipsis) => f
             .debug_struct("NameList")
@@ -544,6 +554,7 @@ pub struct LuaRunState {
 }
 
 pub struct LuaAllocator {
+    // XXX run out of last_id's?
     last_id: usize,
 }
 
@@ -551,10 +562,15 @@ impl LuaAllocator {
     pub fn new() -> LuaAllocator {
         return LuaAllocator { last_id: 1 };
     }
+
+    fn get_id(&mut self) -> usize {
+        let id = self.last_id;
+        self.last_id += 1;
+        return id;
+    }
     // provide a garbage-collectable empty table
     pub fn allocate_tbl(&mut self) -> LV {
-        let table_id = self.last_id;
-        self.last_id += 1;
+        let table_id = self.get_id();
         return LV::LuaTable {
             v: Rc::new(RefCell::new(HashMap::new())),
             id: table_id,
@@ -589,6 +605,30 @@ impl<'a> LuaRunState {
                     LuaFrame::frame_for_native_call(func, provided_args, protected_call);
                 self.frame_stack.push(self.current_frame.clone());
                 self.current_frame = new_frame;
+            }
+
+            LV::PCall => {
+                // XXX this means that pcall doesn't show up in the stack trace
+                match provided_args {
+                    LV::LuaList(mut v) => {
+                        if v.len() == 0 {
+                            self.raise_error(LuaErr {
+                                _msg: "Invalid params to pcall (0-length)".to_string(),
+                            });
+                            return;
+                        }
+                        let new_args = v.split_off(1);
+                        let new_args = LV::LuaList(new_args);
+                        // Safety: list is only of length 1 now
+                        let func = v.pop().unwrap();
+                        self.enter_function_call(func, new_args, true);
+                        return;
+                    }
+                    _ => self.raise_error(
+                        LuaErr::msg::<(), String>("Invalid params to pcall".to_string())
+                            .unwrap_err(),
+                    ),
+                }
             }
             _ => {
                 panic!("Received a non-func to enter");
@@ -681,6 +721,7 @@ pub fn global_env(stdlib: &HashMap<String, LV>) -> LuaEnv {
         };
     }
 
+    // hacky
     macro_rules! pkg {
         ($name: expr) => {
             ($name.to_string(), stdlib.get($name).unwrap().clone())
@@ -694,6 +735,7 @@ pub fn global_env(stdlib: &HashMap<String, LV>) -> LuaEnv {
         global!("tonumber", lua_tonumber),
         global!("collectgarbage", lua_noop),
         global!("setmetatable", lua_noop),
+        ("pcall".to_string(), LV::PCall),
         pkg!("string"),
         pkg!("math"),
         pkg!("table"),
