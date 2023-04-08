@@ -386,9 +386,27 @@ impl<'a> PartialEq for LV {
 #[derive(Clone)]
 pub struct LuaValueStack {
     values: Vec<LV>,
+    reg_a: LV,
+    reg_b: LV,
 }
 
 impl LuaValueStack {
+    fn new() -> LuaValueStack {
+        return LuaValueStack {
+            values: vec![],
+            reg_a: LV::LuaNil,
+            reg_b: LV::LuaNil,
+        };
+    }
+
+    fn from(values: Vec<LV>) -> LuaValueStack {
+        return LuaValueStack {
+            values,
+            reg_a: LV::LuaNil,
+            reg_b: LV::LuaNil,
+        };
+    }
+
     fn push(&mut self, val: LV) {
         self.values.push(val);
     }
@@ -462,6 +480,15 @@ impl LuaEnv {
         return self.data.borrow().get(name);
     }
 
+    fn get_parent_env(&self) -> LuaEnv {
+        let parent_data = self
+            .data
+            .borrow()
+            .parent
+            .clone()
+            .expect("Tried to get parent env that doesn't exist");
+        return LuaEnv { data: parent_data };
+    }
     fn make_child_env(&self) -> LuaEnv {
         // this makes a new environment that has self as a parent
         // so lookups will go through it (basically local scope from global)
@@ -495,7 +522,7 @@ impl LuaFrame {
         return LuaFrame {
             code,
             pc: 0,
-            stack: LuaValueStack { values: vec![] },
+            stack: LuaValueStack::new(),
             env,
             protected_entry: protected_call,
         };
@@ -505,14 +532,20 @@ impl LuaFrame {
         return LuaFrame {
             code: CodeObj::native_obj(),
             pc: 0,
-            stack: LuaValueStack {
-                values: vec![func, args],
-            },
+            stack: LuaValueStack::from(vec![func, args]),
             /// XXX this is wrong
             env: LuaEnv::empty(),
             protected_entry: protected_call,
         };
     }
+
+    fn enter_child_scope(&mut self) {
+        self.env = self.env.make_child_env();
+    }
+    fn leave_child_scope(&mut self) {
+        self.env = self.env.get_parent_env();
+    }
+
     fn assign_args(&mut self, arglist: Vec<String>, args: LV) {
         // we want to take every argument in the arglist and set it into the environment
         // as locals

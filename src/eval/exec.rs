@@ -14,6 +14,8 @@ use natives::lua_coerce_lnum;
 use natives::lua_truthy;
 use natives::LuaArgs;
 
+use crate::datastructures::lua_ssetattr;
+
 #[derive(Debug)]
 pub enum ExecResult {
     // there was some error in the process
@@ -148,6 +150,24 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
         BC::NOOP => {
             // noop, just do nothing
         }
+        BC::DUP => {
+            let val = pop!();
+            push(s, val.clone());
+            push(s, val);
+        }
+        BC::SWAP => {
+            let a = pop!();
+            let b = pop!();
+            push(s, a);
+            push(s, b);
+        }
+        BC::STORE_A => {
+            let value = pop!();
+            s.current_frame.stack.reg_a = value;
+        }
+        BC::LOAD_A => {
+            push(s, s.current_frame.stack.reg_a.clone());
+        }
         BC::JUMP_FALSE(tgt) => {
             let check = pop!();
             if !lua_truthy(&check) {
@@ -218,6 +238,13 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
             // this is inheriting the same id s it's the "same" table
             push(s, LV::LuaTable { v: tbl, id: id });
             // vm_panic!(s, "TODO: implement assign table value");
+        }
+        BC::DO_BLOCK => {
+            // here we just want to enter a new scope
+            s.current_frame.enter_child_scope();
+        }
+        BC::DO_BLOCK_END => {
+            s.current_frame.leave_child_scope();
         }
         BC::POP => {
             pop!();
@@ -490,16 +517,33 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
             }
         }
         BC::GOTO(_) => {
-            todo!()
+            vm_panic!(s, "TODO");
         }
         BC::ASSIGN_ARR_ACCESS() => {
-            todo!()
+            vm_panic!(s, "TODO");
         }
-        BC::ASSIGN_DOT_ACCESS(_) => {
-            todo!()
+        BC::ASSIGN_DOT_ACCESS(name) => {
+            // $1.name = $2
+            let mut target = pop!();
+            let value = pop!();
+            match lua_ssetattr(&mut target, name, value) {
+                Ok(_) => {}
+                Err(err) => {
+                    dbg!(err);
+                    vm_panic!(s, "Failed on setattr");
+                }
+            };
         }
         BC::CALL_METHOD => {
-            todo!()
+            // value:name(args)
+            // equivalent to v.name(v, ...args) but v is only looked up once
+            //
+            let args = pop!();
+            let name = pop!();
+            let value = pop!();
+            // value:name(args)
+            // first we look up the value
+            vm_panic!(s, "TODO");
         }
         BC::JUMP_TRUE(_) => {
             todo!()

@@ -16,8 +16,10 @@ pub fn getattr(object: &LV, property: &str) -> LuaResult {
             }
         }
         _ => {
-            dbg!(object);
-            panic!("Unhandled getattr case")
+            return LuaErr::msg(format!("Do not know how to getattr {}", object));
+            // dbg!(object);
+            // return LuaErr::msg()
+            // panic!("Unhandled getattr case")
         }
     }
 }
