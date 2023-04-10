@@ -5,6 +5,8 @@ use termion::input::TermRead;
 use termion::raw::{IntoRawMode, RawTerminal};
 use termion::terminal_size;
 
+use crate::eval::LuaRunState;
+
 // this frame will track our write bounds
 struct TFrame {
     x: u16,
@@ -24,12 +26,20 @@ fn fhline<W: std::io::Write>(out: &mut RawTerminal<W>, frame: &TFrame, y: u16) {
     }
 }
 
-fn draw_bytecode<W: std::io::Write>(out: &mut RawTerminal<W>, frame: &TFrame) {
+fn draw_bytecode<W: std::io::Write>(state: &LuaRunState, out: &mut RawTerminal<W>, frame: &TFrame) {
     // top line
     fhline(out, frame, 0);
+    // get bytes
+    let pc = state.current_frame.pc;
+    let bytes = &state.current_frame.code.bytecode[pc..(pc + (frame.height as usize))];
     // frames
     for idx in 1..(frame.height - 1) {
-        write!(out, "{}|Byte {}", fpos(frame, 0, idx), idx,).unwrap();
+        let byte_repr = match bytes.get((idx as usize) - 1) {
+            Some(bc) => format!("{:?}", bc),
+            None => "XXX".to_string(),
+        };
+
+        write!(out, "{}|Byte {}", fpos(frame, 0, idx), byte_repr,).unwrap();
     }
     // bottom line
     fhline(out, frame, frame.height - 1);
@@ -57,7 +67,7 @@ fn draw_stack<W: std::io::Write>(out: &mut RawTerminal<W>, frame: &TFrame) {
     fhline(out, frame, frame.height - 1);
 }
 
-fn draw_debugger_state<W: std::io::Write>(stdout: &mut RawTerminal<W>) {
+fn draw_debugger_state<W: std::io::Write>(state: &LuaRunState, stdout: &mut RawTerminal<W>) {
     // let's figure out the terminal size
     let (term_w, term_h) = terminal_size().unwrap();
 
@@ -106,7 +116,7 @@ fn draw_debugger_state<W: std::io::Write>(stdout: &mut RawTerminal<W>) {
         height: frames_frame.height * 2,
     };
 
-    draw_bytecode(stdout, &bytecode_frame);
+    draw_bytecode(state, stdout, &bytecode_frame);
     draw_frames(stdout, &frames_frame);
     draw_stack(stdout, &stack_frame);
 
@@ -126,13 +136,13 @@ pub enum DebugCmd {
     Continue,
 }
 
-pub fn debugger_loop() -> DebugCmd {
+pub fn debugger_loop(state: &LuaRunState) -> DebugCmd {
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode().unwrap();
 
-    draw_debugger_state(&mut stdout);
+    draw_debugger_state(state, &mut stdout);
     for c in stdin.keys() {
-        draw_debugger_state(&mut stdout);
+        draw_debugger_state(state, &mut stdout);
         // Clear the current line.
         write!(
             stdout,

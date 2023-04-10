@@ -470,19 +470,10 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
                 }
             }
         }
-        BC::DOT_ACCESS => {
+        BC::DOT_ACCESS(name) => {
             let property_obj = pop!();
             let object = pop!();
-            let property;
-            match property_obj {
-                LV::LuaS(s) => {
-                    property = s;
-                }
-                _ => {
-                    dbg!(property_obj);
-                    vm_panic!(s, "Tried to use a non-string on a dot access");
-                }
-            };
+            let property = name;
             match getattr(&object, &property) {
                 Ok(v) => push(s, v),
                 Err(e) => {

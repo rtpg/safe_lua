@@ -54,7 +54,7 @@ pub enum BC {
     SET_LOCAL,
 
     ARRAY_ACCESS,
-    DOT_ACCESS,
+    DOT_ACCESS(String),
 
     POP,
     // just copy the top value of the stack
@@ -845,9 +845,7 @@ pub fn push_prefixexpr<'a>(
             DotAccess(name) => {
                 // a.b
                 // a is already on the satck
-                // push b
-                code.emit(BC::PUSH_STRING(name.to_string()), None);
-                code.emit(BC::DOT_ACCESS, None);
+                code.emit(BC::DOT_ACCESS(name.to_string()), None);
             }
             MethodCall(_name, _args) => {
                 // a(:name)(args)
@@ -861,10 +859,8 @@ pub fn push_prefixexpr<'a>(
                         // a.name(a, ..args), so on compilation we can do this right
                         // let's copy a (we'll need it later)
                         code.emit(BC::DUP, None);
-                        // let's push up name
-                        code.emit(BC::PUSH_STRING(n.to_string()), None);
-                        // then we do the lookup
-                        code.emit(BC::DOT_ACCESS, None);
+                        // let's do a dot access lookup
+                        code.emit(BC::DOT_ACCESS(n.to_string()), None);
                         // now the stack is
                         // [a func]
                         // let's get the args built
@@ -923,8 +919,7 @@ pub fn push_variable<'a>(v: ast::Var<'a>, code: &mut impl Code<'a>) {
             // push a
             push_prefixexpr(&prefix_expr, false, code);
             // push b
-            code.emit(BC::PUSH_STRING(name.to_string()), None);
-            code.emit(BC::DOT_ACCESS, None);
+            code.emit(BC::DOT_ACCESS(name.to_string()), None);
         }
     }
 }
