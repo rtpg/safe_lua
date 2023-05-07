@@ -472,6 +472,11 @@ impl LuaEnv {
             })),
         };
     }
+
+    fn get_parent_env(&self) -> LuaEnv {
+        let parent_data = self.data.borrow().parent.as_ref().unwrap().clone();
+        return LuaEnv { data: parent_data };
+    }
 }
 
 #[derive(Clone)]
@@ -689,6 +694,15 @@ impl<'a> LuaRunState {
         self.frame_stack = vec![];
     }
 
+    pub fn enter_child_scope(&mut self) {
+        // enter a do block, mainly
+        self.current_frame.env = self.current_frame.env.make_child_env();
+    }
+
+    pub fn leave_child_scope(&mut self) {
+        // leave a do block, mainly
+        self.current_frame.env = self.current_frame.env.get_parent_env();
+    }
     // provide a garbage-collectable empty table
     pub fn allocate_tbl(&mut self) -> LV {
         // TODO probably want to clean this up later on

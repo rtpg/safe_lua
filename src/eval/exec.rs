@@ -222,6 +222,8 @@ pub fn exec_step(s: &mut LuaRunState) -> Option<ExecResult> {
         BC::POP => {
             pop!();
         }
+        BC::DO_BLOCK_START => s.enter_child_scope(),
+        BC::DO_BLOCK_END => s.leave_child_scope(),
         BC::PUSH_NAMELIST(namelist, ellipsis) => {
             push(s, LV::NameList(namelist.to_vec(), *ellipsis))
         }

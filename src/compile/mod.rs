@@ -76,10 +76,14 @@ pub enum BC {
     ASSIGN_ARR_ACCESS(),
     // $1.n = $2
     ASSIGN_DOT_ACCESS(Name),
-    // call into a do/end block
-    DO_BLOCK(usize),
-    // end a do block (thus fixing up the scope)
+    // start a do block
+    DO_BLOCK_START,
+    // end one
     DO_BLOCK_END,
+    // // call into a do/end block
+    // DO_BLOCK(usize),
+    // // end a do block (thus fixing up the scope)
+    // DO_BLOCK_END,
     // call function (normal)
     CALL_FUNCTION,
     // call function (method)
@@ -973,6 +977,7 @@ pub fn push_args<'a>(args: &ast::Args<'a>, code: &mut impl Code<'a>) {
 //     }
 // }
 pub fn compile_block<'a>(b: &ast::Block<'a>, code: &mut impl Code<'a>) {
+    code.emit(BC::DO_BLOCK_START, None);
     let stats = &b.stats;
     let retstat = &b.retstat;
     for stat in stats {
@@ -1013,6 +1018,7 @@ pub fn compile_block<'a>(b: &ast::Block<'a>, code: &mut impl Code<'a>) {
             }
         }
     }
+    code.emit(BC::DO_BLOCK_END, None);
 }
 pub fn compile<'a, 'b>(parsed_block: ast::Block<'a>, contents: &'a str) -> CodeObj {
     let mut code = new_code_obj(contents);
