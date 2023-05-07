@@ -54,12 +54,20 @@ pub enum BC {
     SET_LOCAL,
 
     ARRAY_ACCESS,
-    DOT_ACCESS,
+    DOT_ACCESS(String),
 
     POP,
-
+    // just copy the top value of the stack
+    DUP,
+    // swap the top two values of the stack
+    SWAP,
     NOOP,
 
+    // registers
+    // store into register A (pops off stack)
+    STORE_A,
+    // pushes contents of register A onto stack
+    LOAD_A,
     GOTO(String),
 
     // operators
@@ -89,6 +97,8 @@ pub enum BC {
     // call function (method)
     RUN_NATIVE_FUNC,
     // call a native function
+    // stack is (in order)
+    // [arguments name object]
     CALL_METHOD,
     // when a function/method isn't used for assignment, unwrap with this op
     UNWRAP_RETURN,
@@ -839,24 +849,47 @@ pub fn push_prefixexpr<'a>(
             DotAccess(name) => {
                 // a.b
                 // a is already on the satck
-                // push b
-                code.emit(BC::PUSH_STRING(name.to_string()), None);
-                code.emit(BC::DOT_ACCESS, None);
+                code.emit(BC::DOT_ACCESS(name.to_string()), None);
             }
             MethodCall(_name, _args) => {
                 // a(:name)(args)
                 // a is already on the stack
+                // a:name(args) is actually just
+                // a.name(a, ..args), so on compilation we can do this right
+
                 match &_name {
-                    Some(n) => code.emit(BC::PUSH_STRING(n.to_string()), None),
-                    None => {}
-                }
-
-                // also push the arguments on the stack
-                push_args(_args, code);
-
-                match _name {
-                    Some(_n) => code.emit(BC::CALL_METHOD, None),
-                    None => code.emit(BC::CALL_FUNCTION, None),
+                    Some(n) => {
+                        // a:name(args) is actually just
+                        // a.name(a, ..args), so on compilation we can do this right
+                        // let's copy a (we'll need it later)
+                        code.emit(BC::DUP, None);
+                        // let's do a dot access lookup
+                        code.emit(BC::DOT_ACCESS(n.to_string()), None);
+                        // now the stack is
+                        // [a func]
+                        // let's get the args built
+                        code.emit(BC::SWAP, None);
+                        // we now have [func a]
+                        code.emit(BC::STORE_A, None);
+                        // we now have [func]
+                        let argcount = push_arglist(_args, code);
+                        // we now have [func, argn, ..., arg1, arg0]
+                        // we will now push "self"
+                        code.emit(BC::LOAD_A, None);
+                        // we can now build the list
+                        code.emit(BC::BUILD_LIST(argcount + 1), None);
+                        // stack is now [func, arglist]
+                        code.emit(BC::CALL_FUNCTION, None);
+                    }
+                    None => {
+                        let argcount = push_arglist(_args, code);
+                        if argcount == 0 {
+                            code.emit(BC::PUSH_NIL, None);
+                        } else {
+                            code.emit(BC::BUILD_LIST(argcount), None);
+                        }
+                        code.emit(BC::CALL_FUNCTION, None);
+                    }
                 }
                 // if we aren't using the functions afterwards in assignment we should just unwrap
                 // This way of doing this is really not smart. The usual case will be to unwrap returns
@@ -890,8 +923,7 @@ pub fn push_variable<'a>(v: ast::Var<'a>, code: &mut impl Code<'a>) {
             // push a
             push_prefixexpr(&prefix_expr, false, code);
             // push b
-            code.emit(BC::PUSH_STRING(name.to_string()), None);
-            code.emit(BC::DOT_ACCESS, None);
+            code.emit(BC::DOT_ACCESS(name.to_string()), None);
         }
     }
 }
@@ -912,7 +944,41 @@ pub fn push_exprlist<'a>(
     code.emit(BC::BUILD_LIST(expr_count), None);
 }
 
-pub fn push_args<'a>(args: &ast::Args<'a>, code: &mut impl Code<'a>) {
+pub fn push_arglist<'a>(args: &ast::Args<'a>, code: &mut impl Code<'a>) -> usize {
+    // push arguments onto the stack, returning the number
+    // of items pushed onto the stack
+    use ast::Args::*;
+
+    match args {
+        Literal(s) => {
+            code.emit(BC::PUSH_STRING(s.to_string()), None);
+            return 1;
+        }
+        Table(ctr) => {
+            push_table(&ctr, code);
+            return 1;
+        }
+        List(maybe_exprs) => {
+            match maybe_exprs {
+                None => return 0,
+                Some(exprs) => {
+                    // f(a, b, c)
+                    let expr_count = exprs.len();
+                    // since we build up the list a, b, c , we need to
+                    // build out the stack like c, b, a
+
+                    for idx in (0..(expr_count)).rev() {
+                        let expr = &exprs[idx];
+                        // TODO handle rightward expansion of args (3.4)
+                        push_expr(expr, false, code);
+                    }
+                    return expr_count;
+                }
+            }
+        }
+    }
+}
+pub fn push_args<'a>(args: &ast::Args<'a>, plus_one: bool, code: &mut impl Code<'a>) {
     // build up the argument list for passing to a function
     // at the end we should have on top of the stack one list element
     // holding our arguments
@@ -922,18 +988,22 @@ pub fn push_args<'a>(args: &ast::Args<'a>, code: &mut impl Code<'a>) {
         Literal(s) => {
             // just build the string and make a list
             code.emit(BC::PUSH_STRING(s.to_string()), None);
-            code.emit(BC::BUILD_LIST(1), None);
+            code.emit(BC::BUILD_LIST(if plus_one { 2 } else { 1 }), None);
         }
         Table(ctr) => {
             push_table(&ctr, code);
-            code.emit(BC::BUILD_LIST(1), None);
+            code.emit(BC::BUILD_LIST(if plus_one { 2 } else { 1 }), None);
         }
         List(maybe_exprs) => {
             match maybe_exprs {
                 None => {
                     // f()
-                    // here we'll just push None to the stack
-                    code.emit(BC::PUSH_NIL, None);
+                    if plus_one {
+                        code.emit(BC::BUILD_LIST(1), None);
+                    } else {
+                        // here we'll just push None to the stack
+                        code.emit(BC::PUSH_NIL, None);
+                    }
                 }
                 Some(exprs) => {
                     // f(a, b, c)
@@ -946,7 +1016,10 @@ pub fn push_args<'a>(args: &ast::Args<'a>, code: &mut impl Code<'a>) {
                         // TODO handle rightward expansion of args (3.4)
                         push_expr(expr, false, code);
                     }
-                    code.emit(BC::BUILD_LIST(expr_count), None);
+                    code.emit(
+                        BC::BUILD_LIST(if plus_one { expr_count + 1 } else { expr_count }),
+                        None,
+                    );
                 }
             }
         }
@@ -985,7 +1058,11 @@ pub fn compile_block<'a>(b: &ast::Block<'a>, code: &mut impl Code<'a>) {
     }
 
     match retstat {
-        None => {}
+        None => {
+            // if we have no return we need to end the do block to fix the scope
+            // if we do have a return then we don't need this (frame will disappear anyways)
+            code.emit(BC::DO_BLOCK_END, None);
+        }
         Some(retstat) => {
             match &retstat.return_expr {
                 None => code.emit(BC::RETURN_NONE, None),

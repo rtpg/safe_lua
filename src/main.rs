@@ -38,6 +38,8 @@ struct MainOpts {
     command: Option<String>,
     #[argh(switch, description = "just show me the bytecode")]
     bytecode: bool,
+    #[argh(switch, description = "just show me the AST")]
+    show_ast: bool,
     #[argh(switch, description = "run the REPL")]
     repl: bool,
     #[argh(switch, description = "hook up the stepping debugger")]
@@ -81,10 +83,13 @@ fn main() {
     let contents_lex = lex::LexInput::new(&contents);
     let lex_result = lex::lex_all(contents_lex);
     // dbg!(lex_result).unwrap();
-
     println!("Starting parse");
     let parse_result = parse::parse(&contents);
 
+    if opts.show_ast {
+        dbg!(parse_result);
+        return;
+    }
     println!("starting compile");
     let compile_result = compile::compile(parse_result, &contents);
 
@@ -97,13 +102,14 @@ fn main() {
         // for now we're just going to loop over our yielding mechanisms
         loop {
             if debugging {
-                match debugger::debugger_loop() {
+                match debugger::debugger_loop(&run_state) {
                     debugger::DebugCmd::Quit => {
                         println!("Quit from the debugger");
                         break;
                     }
                     debugger::DebugCmd::Step => {
                         // let's step through one operation
+                        eval::exec::exec_step(&mut run_state);
                     }
                     debugger::DebugCmd::Continue => {
                         debugging = false;
